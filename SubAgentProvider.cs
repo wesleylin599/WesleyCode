@@ -132,12 +132,4 @@ internal class SubAgentProvider : AIContextProvider
 
         return response.Text;
     }
-
-    private class SubAgentAIFunction : AIFunction
-    {
-        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
-    }
 }

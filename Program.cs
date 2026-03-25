@@ -43,10 +43,10 @@ var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCache
 var crsClient = CrsChatClient.Create(baseClient);
 
 var pipeline = new PipelineCompactionStrategy(
-    new ToolResultCompactionStrategy(CompactionTriggers.TokensExceed(100)),
-    new SummarizationCompactionStrategy(crsClient, CompactionTriggers.TokensExceed(10000)),
+    new ToolResultCompactionStrategy(CompactionTriggers.GroupsExceed(16)),
+    new SummarizationCompactionStrategy(crsClient, CompactionTriggers.GroupsExceed(32)),
     new SlidingWindowCompactionStrategy(CompactionTriggers.TurnsExceed(10)),
-    new TruncationCompactionStrategy(CompactionTriggers.TokensExceed(30000))
+    new TruncationCompactionStrategy(CompactionTriggers.GroupsExceed(64))
 );
 var compactionProvider = new CompactionProvider(pipeline);
 var userSkills = Path.Combine(AppContext.BaseDirectory, "skills", "user");
@@ -130,7 +130,17 @@ while (true)
         {
             var task = CancelAgentAsync(source);
             var response = await agent.RunAsync(input, session, cancellationToken: source.Token);
-            Console.WriteLine($"> Agent: {response}");
+            if (string.IsNullOrEmpty(response.Text))
+            {
+                StringBuilder stringBuilder = new StringBuilder();
+                foreach (var message in response.Messages)
+                foreach (var content in message.Contents)
+                    if (content is ErrorContent error)
+                        stringBuilder.AppendLine($"{error.Message}");
+                Console.WriteLine($"> Agent: {stringBuilder}");
+            }
+            else
+                Console.WriteLine($"> Agent: {response}");
             source.Cancel();
             await task;
         }
