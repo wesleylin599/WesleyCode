@@ -34,7 +34,7 @@ var workDirectory = Directory.GetCurrentDirectory();
 
 var loggerFactory = LoggerFactory.Create(builder =>
 {
-    builder.SetMinimumLevel(LogLevel.Debug);
+    //builder.SetMinimumLevel(LogLevel.Debug);
     builder.AddConsole();
 });
 

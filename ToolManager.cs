@@ -134,7 +134,7 @@ public class ToolManager
             if (!string.IsNullOrWhiteSpace(dir))
                 Directory.CreateDirectory(dir);
 
-            await File.WriteAllTextAsync(path, content, new UTF8Encoding(true), cancellationToken);
+            await File.WriteAllTextAsync(path, content, cancellationToken);
             callback = $"""
                 Wrote {content.Length} bytes to {path}.
                 {content}
@@ -164,12 +164,12 @@ public class ToolManager
             Console.WriteLine(path);
             Console.ResetColor();
 
-            var content = await File.ReadAllTextAsync(path, Encoding.UTF8, cancellationToken);
+            var content = await File.ReadAllTextAsync(path, cancellationToken);
             if (content.Contains(oldText, StringComparison.Ordinal))
             {
                 var index = content.IndexOf(oldText, StringComparison.Ordinal);
                 var newContent = content[..index] + newText + content[(index + oldText.Length)..];
-                await File.WriteAllTextAsync(path, newContent, new UTF8Encoding(true), cancellationToken);
+                await File.WriteAllTextAsync(path, newContent, cancellationToken);
                 callback = $"""
                     Edited {path} {oldText.Length} => {newText.Length}.
                     oldText: {oldText}  
