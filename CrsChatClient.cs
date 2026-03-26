@@ -42,7 +42,7 @@ public sealed class CrsChatClient : DelegatingChatClient
     )
     {
         options ??= new ChatOptions();
-        List<ChatMessage> request = [new ChatMessage(ChatRole.Assistant, options.Instructions)];
+        List<ChatMessage> request = [new ChatMessage(ChatRole.User, options.Instructions)];
         foreach (var message in messages)
             if (message.Role == ChatRole.System)
                 request.Add(new ChatMessage(ChatRole.User, message.Text));

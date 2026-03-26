@@ -41,7 +41,7 @@ internal class SubAgentProvider : AIContextProvider
     private static readonly AgentContent reviewer = new AgentContent(
         "reviewer",
         "审阅代理,用于对任务完成度进行评估,执行代理使用后调用本代理",
-        "你是一个审阅代理.评估任务完成度,输出评估结论.不要做更改.",
+        "你是一个审阅代理.从任务队列中获取任务,评估任务完成度,输出评估结论.不要做更改.",
         [ToolManager.CommandFunction, ToolManager.ReadFileFunction, ToolManager.SelectTasksFunction]
     );
 

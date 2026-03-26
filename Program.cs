@@ -34,7 +34,7 @@ var workDirectory = Directory.GetCurrentDirectory();
 
 var loggerFactory = LoggerFactory.Create(builder =>
 {
-    //builder.SetMinimumLevel(LogLevel.Debug);
+    builder.SetMinimumLevel(LogLevel.Debug);
     builder.AddConsole();
 });
 
@@ -43,12 +43,12 @@ var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCache
 var crsClient = CrsChatClient.Create(baseClient);
 
 var pipeline = new PipelineCompactionStrategy(
-    new ToolResultCompactionStrategy(CompactionTriggers.GroupsExceed(16)),
-    new SummarizationCompactionStrategy(crsClient, CompactionTriggers.GroupsExceed(32)),
+    new ToolResultCompactionStrategy(CompactionTriggers.TokensExceed(1500)),
+    new SummarizationCompactionStrategy(crsClient, CompactionTriggers.TokensExceed(10000)),
     new SlidingWindowCompactionStrategy(CompactionTriggers.TurnsExceed(10)),
-    new TruncationCompactionStrategy(CompactionTriggers.GroupsExceed(64))
+    new TruncationCompactionStrategy(CompactionTriggers.TokensExceed(30000))
 );
-var compactionProvider = new CompactionProvider(pipeline);
+var compactionProvider = new CompactionProvider(pipeline, loggerFactory: loggerFactory);
 var userSkills = Path.Combine(AppContext.BaseDirectory, "skills", "user");
 var skillsProvider = new FileAgentSkillsProvider(
     [Path.Combine(AppContext.BaseDirectory, "skills", "system"), userSkills],
@@ -136,7 +136,7 @@ while (true)
                 foreach (var message in response.Messages)
                 foreach (var content in message.Contents)
                     if (content is ErrorContent error)
-                        stringBuilder.AppendLine($"{error.Message}");
+                        stringBuilder.AppendLine(error.Message);
                 Console.WriteLine($"> Agent: {stringBuilder}");
             }
             else
@@ -155,6 +155,7 @@ while (true)
         if (!Directory.Exists(sessionDir))
             Directory.CreateDirectory(sessionDir);
         await File.WriteAllTextAsync(sessionHistory, element.GetRawText(), cts.Token);
+        Console.ResetColor();
     }
 }
 

@@ -135,7 +135,10 @@ public class ToolManager
                 Directory.CreateDirectory(dir);
 
             await File.WriteAllTextAsync(path, content, new UTF8Encoding(true), cancellationToken);
-            callback = $"Wrote {content.Length} bytes to {path}";
+            callback = $"""
+                Wrote {content.Length} bytes to {path}.
+                {content}
+                """;
         }
         catch (Exception ex)
         {
@@ -167,7 +170,11 @@ public class ToolManager
                 var index = content.IndexOf(oldText, StringComparison.Ordinal);
                 var newContent = content[..index] + newText + content[(index + oldText.Length)..];
                 await File.WriteAllTextAsync(path, newContent, new UTF8Encoding(true), cancellationToken);
-                callback = $"Edited {path}";
+                callback = $"""
+                    Edited {path} {oldText.Length} => {newText.Length}.
+                    oldText: {oldText}  
+                    newText: {newText}
+                    """;
             }
             else
             {
@@ -215,7 +222,8 @@ public class ToolManager
     private static List<TaskItem> SelectTasks()
     {
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.Write($"$ select task count {_tasks.Count}");
+        Console.WriteLine($"$ select task count {_tasks.Count}");
+        Console.ResetColor();
 
         return _tasks.ToList();
     }
@@ -225,7 +233,8 @@ public class ToolManager
         var count = _tasks.Count;
 
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.Write($"$ clear task count {count}");
+        Console.WriteLine($"$ clear task count {count}");
+        Console.ResetColor();
 
         _tasks.Clear();
         return $"清理 {count} 条任务添加完成";
