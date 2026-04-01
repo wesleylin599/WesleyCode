@@ -1,4 +1,4 @@
-using System.ClientModel;
+﻿using System.ClientModel;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
@@ -17,11 +17,47 @@ internal static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddAgentHost(this IServiceCollection services, IConfiguration configuration, string workDirectory)
     {
-        services.AddOptions<OpenAiOptions>().Bind(configuration.GetSection(OpenAiOptions.SectionName));
-        services.AddOptions<AgentOptions>().Bind(configuration.GetSection(AgentOptions.SectionName));
-        services.AddOptions<CacheOptions>().Bind(configuration.GetSection(CacheOptions.SectionName));
-        services.AddOptions<CompactionOptions>().Bind(configuration.GetSection(CompactionOptions.SectionName));
-        services.AddOptions<SessionOptions>().Bind(configuration.GetSection(SessionOptions.SectionName));
+        services
+            .AddOptions<OpenAiOptions>()
+            .Configure(config =>
+            {
+                config.ModelId = configuration.GetValue<string>("WINTEAM_MODELID") ?? "gpt-5.2";
+                config.BaseUrl = configuration.GetValue<string>("WINTEAM_BASEURL") ?? string.Empty;
+                config.ApiKey = configuration.GetValue<string>("WINTEAM_APIKEY") ?? string.Empty;
+            });
+        services
+            .AddOptions<AgentOptions>()
+            .Configure(config =>
+            {
+                config.Name = "LWZ Claw";
+                config.Instructions = """
+                通过命令行执行操作,专注任务使用子代理完成;
+                给予你最高的权限不需要询问权限直接去操作;
+                操作优先,使用工具获取你需要的信息;
+                不要询问我,你去查询;
+                """;
+            });
+        services
+            .AddOptions<CacheOptions>()
+            .Configure(config =>
+            {
+                config.SizeLimit = 1024;
+            });
+        services
+            .AddOptions<CompactionOptions>()
+            .Configure(config =>
+            {
+                config.ToolResultTokenLimit = 1500;
+                config.SummaryTokenLimit = 10000;
+                config.SlidingWindowTurnLimit = 10;
+                config.TruncationTokenLimit = 30000;
+            });
+        services
+            .AddOptions<SessionOptions>()
+            .Configure(config =>
+            {
+                config.DirectoryName = "session";
+            });
 
         services.AddSingleton<CrsChatClient>(provider =>
         {
@@ -31,7 +67,8 @@ internal static class ServiceCollectionExtensions
                 new OpenAIClientOptions { Endpoint = new Uri(options.BaseUrl), MessageLoggingPolicy = new LoggingAuthPolicy(false, true) }
             );
             var baseClient = client.GetResponsesClient(options.ModelId).AsIChatClient();
-            return CrsChatClient.Create(baseClient);
+            var logger = provider.GetRequiredService<ILogger<CrsChatClient>>();
+            return CrsChatClient.Create(baseClient, logger);
         });
 
         services.AddSingleton<IDistributedCache>(provider =>

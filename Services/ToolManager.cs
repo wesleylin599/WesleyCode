@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Text;
-using System.Text.RegularExpressions;
 using CliWrap;
 using Microsoft.Extensions.AI;
 
@@ -10,15 +9,6 @@ namespace TestConsole5.Services;
 public class ToolManager
 {
     private static readonly ConcurrentQueue<TaskItem> _tasks = new();
-    private static readonly Regex BlockedCommandRegex = new(
-        @"(?im)(?:^|[|;&]|&&|\|\|)\s*(get-content|gc|type|cat|tac|more|less|head|tail|select-string|sls|grep|egrep|fgrep|rg|ripgrep|sed|awk|cut|sort|uniq|strings|od|xxd|hexdump|get-childitem|gci|dir|ls|find|get-item|gi|stat|file|set-content|add-content|clear-content|out-file|tee-object|tee|new-item|ni|copy-item|ci|copy|cp|move-item|mi|move|mv|remove-item|ri|rm|del|erase|rename-item|rni|ren|set-item|mkdir|md|rmdir|rd|touch|dd|truncate|install|ln|chmod|chown|chgrp)(?:\s|$)",
-        RegexOptions.Compiled
-    );
-    private static readonly Regex RedirectionRegex = new(
-        @"(?im)(?:^|\s)(?:(?:\d+|\*)?>{1,2}(?![=])|(?:\d+|\*)?<{1,3}|&>{1,2}|\d+>&\d+)|\|\s*(?:out-file|set-content|add-content|tee-object|tee)\b",
-        RegexOptions.Compiled
-    );
-
     public static AITool CommandFunction = AIFunctionFactory.Create(Command, null, "命令行工具,禁止执行文件读写,超时一分钟");
     public static AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile, null, "写入文件内容,必要时创建目录,超时一分钟");
     public static AITool EditFileFunction = AIFunctionFactory.Create(EditFile, null, "替换文件中的精确文本,仅替换第一次匹配,超时一分钟");
@@ -51,28 +41,21 @@ public class ToolManager
             Console.WriteLine(command);
             Console.ResetColor();
 
-            if (ContainsBlockedFileIo(command, out var reason))
-            {
-                callback = $"Error: 命令包含文件读写操作，已被屏蔽 ({reason})";
-            }
-            else
-            {
-                var stdout = new StringBuilder();
-                var stderr = new StringBuilder();
-                var cli = OperatingSystem.IsWindows()
-                    ? Cli.Wrap("powershell").WithArguments(args => args.Add("-NoLogo").Add("-NoProfile").Add("-Command").Add(command))
-                    : Cli.Wrap("/bin/bash").WithArguments(args => args.Add("-lc").Add(command));
-                cli = cli.WithWorkingDirectory(Directory.GetCurrentDirectory())
-                    .WithValidation(CommandResultValidation.None)
-                    .WithStandardOutputPipe(PipeTarget.ToStringBuilder(stdout, Encoding.Default))
-                    .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr, Encoding.Default));
+            var stdout = new StringBuilder();
+            var stderr = new StringBuilder();
+            var cli = OperatingSystem.IsWindows()
+                ? Cli.Wrap("powershell").WithArguments(args => args.Add("-NoLogo").Add("-NoProfile").Add("-Command").Add(command))
+                : Cli.Wrap("/bin/bash").WithArguments(args => args.Add("-lc").Add(command));
+            cli = cli.WithWorkingDirectory(Directory.GetCurrentDirectory())
+                .WithValidation(CommandResultValidation.None)
+                .WithStandardOutputPipe(PipeTarget.ToStringBuilder(stdout, Encoding.Default))
+                .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr, Encoding.Default));
 
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                cts.CancelAfter(TimeSpan.FromMinutes(1));
-                var result = await cli.ExecuteAsync(cts.Token);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromMinutes(1));
+            var result = await cli.ExecuteAsync(cts.Token);
 
-                callback = $"[{result.ExitCode}]{stdout.ToString()}{stderr.ToString()}";
-            }
+            callback = $"[{result.ExitCode}]{stdout.ToString()}{stderr.ToString()}";
         }
         catch (OperationCanceledException)
         {
@@ -103,7 +86,7 @@ public class ToolManager
         }
         catch (OperationCanceledException)
         {
-            callback = "Error: 命令执行已取消";
+            callback = "Error: 读取文件已取消";
         }
         catch (Exception ex)
         {
@@ -143,7 +126,7 @@ public class ToolManager
         }
         catch (OperationCanceledException)
         {
-            callback = "Error: 命令执行已取消";
+            callback = "Error: 写入文件已取消";
         }
         catch (Exception ex)
         {
@@ -191,7 +174,7 @@ public class ToolManager
         }
         catch (OperationCanceledException)
         {
-            callback = "Error: 命令执行已取消";
+            callback = "Error: 修改文件已取消";
         }
         catch (Exception ex)
         {
@@ -274,27 +257,6 @@ public class ToolManager
         Console.ForegroundColor = ConsoleColor.DarkGray;
         Console.WriteLine(output);
         Console.ResetColor();
-    }
-
-    private static bool ContainsBlockedFileIo(string command, out string reason)
-    {
-        reason = string.Empty;
-        if (string.IsNullOrWhiteSpace(command))
-            return false;
-
-        if (RedirectionRegex.IsMatch(command))
-        {
-            reason = "redirection";
-            return true;
-        }
-
-        if (BlockedCommandRegex.IsMatch(command))
-        {
-            reason = "file command";
-            return true;
-        }
-
-        return false;
     }
 
     private record TaskItem(
