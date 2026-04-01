@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Security;
 using System.Text;
@@ -45,14 +44,19 @@ internal class SubAgentProvider : AIContextProvider
         [ToolManager.CommandFunction, ToolManager.ReadFileFunction, ToolManager.SelectTasksFunction]
     );
 
-    private static List<AgentContent> _agentContents = [planner, executor, reviewer];
+    private static readonly List<AgentContent> _agentContents = [planner, executor, reviewer];
+    private static readonly Dictionary<string, AgentContent> _agents = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [planner.Name] = planner,
+        [executor.Name] = executor,
+        [reviewer.Name] = reviewer,
+    };
 
     private readonly AITool[] _tools;
     private readonly IChatClient _client;
     private readonly string _workDirectory;
     private readonly AIContextProvider[] _providers;
     private readonly ILogger<SubAgentProvider> _logger;
-    private readonly ConcurrentDictionary<string, AgentContent> _agents = new();
 
     public SubAgentProvider(string workDirectory, IChatClient client, AIContextProvider[]? providers = null, ILoggerFactory? loggerFactory = null)
     {
@@ -68,9 +72,7 @@ internal class SubAgentProvider : AIContextProvider
         var sb = new StringBuilder();
         foreach (var agentContent in _agentContents)
         {
-            var key = Guid.NewGuid().ToString();
             sb.AppendLine("  <agent>");
-            sb.AppendLine($"    <key>{key}</key>");
             sb.AppendLine($"    <name>{SecurityElement.Escape(agentContent.Name)}</name>");
             sb.AppendLine($"    <description>{SecurityElement.Escape(agentContent.Description)}</description>");
             sb.AppendLine($"    <tools>");
@@ -83,7 +85,6 @@ internal class SubAgentProvider : AIContextProvider
             }
             sb.AppendLine($"    </tools>");
             sb.AppendLine("  </agent>");
-            _agents[key] = agentContent;
         }
 
         var instructionPrompt = string.Format(DefaultInstructionPrompt, sb.ToString().TrimEnd());
@@ -93,12 +94,12 @@ internal class SubAgentProvider : AIContextProvider
     private record AgentContent(string Name, string Description, string Instructions, AITool[] Tools);
 
     private async Task<string> UseSubAgentAsync(
-        [Description("子代理的key")] string key,
+        [Description("子代理名称")] string name,
         [Description("子代理输入")] string input,
         CancellationToken cancellationToken = default
     )
     {
-        if (!_agents.TryGetValue(key, out var content))
+        if (!_agents.TryGetValue(name, out var content))
             return "Error: 未找到该子代理.";
 
         _logger.LogInformation($"{content.Name} request: {input}");
@@ -111,7 +112,7 @@ internal class SubAgentProvider : AIContextProvider
                 ChatOptions = new ChatOptions
                 {
                     Instructions = content.Instructions,
-                    Tools = ToolManager.AllFunctions,
+                    Tools = content.Tools,
                     ToolMode = ChatToolMode.Auto,
                     AllowMultipleToolCalls = true,
                 },

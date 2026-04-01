@@ -19,10 +19,10 @@ public class ToolManager
         RegexOptions.Compiled
     );
 
-    public static AITool CommandFunction = AIFunctionFactory.Create(Command, null, "命令行工具,不要执行文件读写,超时一分钟");
-    public static AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile, null, "写入文件内容，必要时创建目录,超时一分钟");
+    public static AITool CommandFunction = AIFunctionFactory.Create(Command, null, "命令行工具,禁止执行文件读写,超时一分钟");
+    public static AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile, null, "写入文件内容,必要时创建目录,超时一分钟");
+    public static AITool EditFileFunction = AIFunctionFactory.Create(EditFile, null, "替换文件中的精确文本,仅替换第一次匹配,超时一分钟");
     public static AITool ReadFileFunction = AIFunctionFactory.Create(ReadFile, null, "读取文本文件内容,超时一分钟");
-    public static AITool EditFileFunction = AIFunctionFactory.Create(EditFile, null, "替换文件中的精确文本，仅替换第一次匹配,超时一分钟");
     public static AITool EnqueueTaskFunction = AIFunctionFactory.Create(EnqueueTask, null, "添加任务到队列中");
     public static AITool DequeueTaskFunction = AIFunctionFactory.Create(DequeueTask, null, "从队列中取出任务");
     public static AITool SelectTasksFunction = AIFunctionFactory.Create(SelectTasks, null, "获取任务队列列表");
@@ -116,6 +116,7 @@ public class ToolManager
     private static async Task<string> WriteFile(
         [Description("文件路径")] string path,
         [Description("文本内容")] string content,
+        [Description("写入的字符编码")] string encoding,
         CancellationToken cancellationToken = default
     )
     {
@@ -134,7 +135,7 @@ public class ToolManager
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(1));
-            await File.WriteAllTextAsync(path, content, cts.Token);
+            await File.WriteAllTextAsync(path, content, Encoding.GetEncoding(encoding), cts.Token);
             callback = $"""
                 Wrote {content.Length} bytes to {path}.
                 {content}
@@ -156,6 +157,7 @@ public class ToolManager
         [Description("文件路径")] string path,
         [Description("旧文本内容")] string oldText,
         [Description("新文本内容")] string newText,
+        [Description("写入的字符编码")] string encoding,
         CancellationToken cancellationToken = default
     )
     {
@@ -170,12 +172,12 @@ public class ToolManager
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(1));
-            var content = await File.ReadAllTextAsync(path, cts.Token);
+            var content = await File.ReadAllTextAsync(path, Encoding.Default, cts.Token);
             if (content.Contains(oldText, StringComparison.Ordinal))
             {
                 var index = content.IndexOf(oldText, StringComparison.Ordinal);
                 var newContent = content[..index] + newText + content[(index + oldText.Length)..];
-                await File.WriteAllTextAsync(path, newContent, cts.Token);
+                await File.WriteAllTextAsync(path, newContent, Encoding.GetEncoding(encoding), cts.Token);
                 callback = $"""
                     Edited {path} {oldText.Length} => {newText.Length}.
                     oldText: {oldText}  
