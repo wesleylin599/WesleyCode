@@ -38,9 +38,12 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     {
         try
         {
-            var startedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            using var reg = _lifetime.ApplicationStarted.Register(() => startedTcs.TrySetResult());
-            await startedTcs.Task.WaitAsync(stoppingToken);
+            if (!_lifetime.ApplicationStarted.IsCancellationRequested)
+            {
+                var startedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                using var reg = _lifetime.ApplicationStarted.Register(() => startedTcs.TrySetResult());
+                await startedTcs.Task.WaitAsync(stoppingToken);
+            }
 
             _session = await _sessionStore.LoadAsync(stoppingToken);
             _lastSavedAt = DateTimeOffset.UtcNow;
