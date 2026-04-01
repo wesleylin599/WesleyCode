@@ -1,4 +1,6 @@
-﻿namespace Microsoft.Extensions.AI;
+using Microsoft.Extensions.AI;
+
+namespace Microsoft.Extensions.AI;
 
 public sealed class CrsChatClient : DelegatingChatClient
 {
@@ -42,10 +44,20 @@ public sealed class CrsChatClient : DelegatingChatClient
     )
     {
         options ??= new ChatOptions();
-        List<ChatMessage> request = [new ChatMessage(ChatRole.User, options.Instructions)];
+        List<ChatMessage> request =
+        [
+            new ChatMessage(
+                ChatRole.User,
+                $"""
+                <instructions>
+                {options.Instructions}
+                </instructions>
+                """
+            ),
+        ];
         foreach (var message in messages)
             if (message.Role == ChatRole.System)
-                request.Add(new ChatMessage(ChatRole.User, message.Text));
+                request.Add(new ChatMessage(ChatRole.User, $"<system>{message.Text}</system>"));
             else
                 request.Add(message);
         return base.GetStreamingResponseAsync(request, options, cancellationToken);

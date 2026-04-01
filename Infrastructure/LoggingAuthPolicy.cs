@@ -1,4 +1,4 @@
-﻿using System.ClientModel.Primitives;
+using System.ClientModel.Primitives;
 using System.Diagnostics;
 using System.Text;
 
@@ -15,8 +15,8 @@ internal class LoggingAuthPolicy : PipelinePolicy
 
     public LoggingAuthPolicy(bool logRequestBody, bool logResponseBody)
     {
-        this._logRequestBody = logRequestBody;
-        this._logResponseBody = logResponseBody;
+        _logRequestBody = logRequestBody;
+        _logResponseBody = logResponseBody;
     }
 
     public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)

@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Security;
 using System.Text;
@@ -7,7 +7,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace TestConsole5;
+namespace TestConsole5.Services;
 
 internal class SubAgentProvider : AIContextProvider
 {

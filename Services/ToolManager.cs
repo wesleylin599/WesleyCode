@@ -1,29 +1,28 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Text;
 using System.Text.RegularExpressions;
 using CliWrap;
 using Microsoft.Extensions.AI;
 
-namespace TestConsole5;
+namespace TestConsole5.Services;
 
 public class ToolManager
 {
-    private const int MaxOutputChars = 50000;
     private static readonly ConcurrentQueue<TaskItem> _tasks = new();
     private static readonly Regex BlockedCommandRegex = new(
-        @"(?im)(^|[|;&]\\s*)(get-content|gc|cat|more|less|head|tail|set-content|add-content|out-file|tee-object|tee|new-item|copy-item|move-item|remove-item|del|erase|touch|cp|mv|rm|ni)(\\s|$)",
+        @"(?im)(?:^|[|;&]|&&|\|\|)\s*(get-content|gc|type|cat|tac|more|less|head|tail|select-string|sls|grep|egrep|fgrep|rg|ripgrep|sed|awk|cut|sort|uniq|strings|od|xxd|hexdump|get-childitem|gci|dir|ls|find|get-item|gi|stat|file|set-content|add-content|clear-content|out-file|tee-object|tee|new-item|ni|copy-item|ci|copy|cp|move-item|mi|move|mv|remove-item|ri|rm|del|erase|rename-item|rni|ren|set-item|mkdir|md|rmdir|rd|touch|dd|truncate|install|ln|chmod|chown|chgrp)(?:\s|$)",
         RegexOptions.Compiled
     );
     private static readonly Regex RedirectionRegex = new(
-        @"(?im)(^|\\s)(\\d*>>|\\d*>|\\d*<|\\*?>>|\\*?>|&>>|&>|<<?|\\|\\s*(?:out-file|set-content|add-content|tee-object|tee)\\b)",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase
+        @"(?im)(?:^|\s)(?:(?:\d+|\*)?>{1,2}(?![=])|(?:\d+|\*)?<{1,3}|&>{1,2}|\d+>&\d+)|\|\s*(?:out-file|set-content|add-content|tee-object|tee)\b",
+        RegexOptions.Compiled
     );
 
     public static AITool CommandFunction = AIFunctionFactory.Create(Command, null, "命令行工具,不要执行文件读写,超时一分钟");
-    public static AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile, null, "写入文件内容，必要时创建目录");
-    public static AITool ReadFileFunction = AIFunctionFactory.Create(ReadFile, null, "读取文本文件内容，返回 UTF-8 文本");
-    public static AITool EditFileFunction = AIFunctionFactory.Create(EditFile, null, "替换文件中的精确文本，仅替换第一次匹配");
+    public static AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile, null, "写入文件内容，必要时创建目录,超时一分钟");
+    public static AITool ReadFileFunction = AIFunctionFactory.Create(ReadFile, null, "读取文本文件内容,超时一分钟");
+    public static AITool EditFileFunction = AIFunctionFactory.Create(EditFile, null, "替换文件中的精确文本，仅替换第一次匹配,超时一分钟");
     public static AITool EnqueueTaskFunction = AIFunctionFactory.Create(EnqueueTask, null, "添加任务到队列中");
     public static AITool DequeueTaskFunction = AIFunctionFactory.Create(DequeueTask, null, "从队列中取出任务");
     public static AITool SelectTasksFunction = AIFunctionFactory.Create(SelectTasks, null, "获取任务队列列表");
@@ -58,7 +57,6 @@ public class ToolManager
             }
             else
             {
-                var target = OperatingSystem.IsWindows() ? "powershell" : "/bin/bash";
                 var stdout = new StringBuilder();
                 var stderr = new StringBuilder();
                 var cli = OperatingSystem.IsWindows()
@@ -66,20 +64,14 @@ public class ToolManager
                     : Cli.Wrap("/bin/bash").WithArguments(args => args.Add("-lc").Add(command));
                 cli = cli.WithWorkingDirectory(Directory.GetCurrentDirectory())
                     .WithValidation(CommandResultValidation.None)
-                    .WithStandardOutputPipe(PipeTarget.ToStringBuilder(stdout, Encoding.UTF8))
-                    .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr, Encoding.UTF8));
+                    .WithStandardOutputPipe(PipeTarget.ToStringBuilder(stdout, Encoding.Default))
+                    .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr, Encoding.Default));
 
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(TimeSpan.FromMinutes(1));
                 var result = await cli.ExecuteAsync(cts.Token);
 
-                var _output = stdout.ToString();
-                var _errpr = stderr.ToString();
-
-                var output = _output.Length > MaxOutputChars ? _output[..MaxOutputChars] + "\n...(truncated)" : _output;
-                var error = _errpr.Length > MaxOutputChars ? _errpr[..MaxOutputChars] + "\n...(truncated)" : _errpr;
-
-                callback = $"[{result.ExitCode}]{output}{error}";
+                callback = $"[{result.ExitCode}]{stdout.ToString()}{stderr.ToString()}";
             }
         }
         catch (OperationCanceledException)
@@ -105,7 +97,13 @@ public class ToolManager
             Console.WriteLine(path);
             Console.ResetColor();
 
-            callback = await File.ReadAllTextAsync(path, Encoding.UTF8, cancellationToken);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromMinutes(1));
+            callback = await File.ReadAllTextAsync(path, Encoding.Default, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            callback = "Error: 命令执行已取消";
         }
         catch (Exception ex)
         {
@@ -134,11 +132,17 @@ public class ToolManager
             if (!string.IsNullOrWhiteSpace(dir))
                 Directory.CreateDirectory(dir);
 
-            await File.WriteAllTextAsync(path, content, cancellationToken);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromMinutes(1));
+            await File.WriteAllTextAsync(path, content, cts.Token);
             callback = $"""
                 Wrote {content.Length} bytes to {path}.
                 {content}
                 """;
+        }
+        catch (OperationCanceledException)
+        {
+            callback = "Error: 命令执行已取消";
         }
         catch (Exception ex)
         {
@@ -164,12 +168,14 @@ public class ToolManager
             Console.WriteLine(path);
             Console.ResetColor();
 
-            var content = await File.ReadAllTextAsync(path, cancellationToken);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromMinutes(1));
+            var content = await File.ReadAllTextAsync(path, cts.Token);
             if (content.Contains(oldText, StringComparison.Ordinal))
             {
                 var index = content.IndexOf(oldText, StringComparison.Ordinal);
                 var newContent = content[..index] + newText + content[(index + oldText.Length)..];
-                await File.WriteAllTextAsync(path, newContent, cancellationToken);
+                await File.WriteAllTextAsync(path, newContent, cts.Token);
                 callback = $"""
                     Edited {path} {oldText.Length} => {newText.Length}.
                     oldText: {oldText}  
@@ -180,6 +186,10 @@ public class ToolManager
             {
                 callback = $"Error: 在 {path} 中未找到匹配文本";
             }
+        }
+        catch (OperationCanceledException)
+        {
+            callback = "Error: 命令执行已取消";
         }
         catch (Exception ex)
         {
@@ -242,17 +252,22 @@ public class ToolManager
 
     private static void EmitToolEvent(string args)
     {
+        bool is_truncated = false;
         var output = new StringBuilder();
-        foreach (var item in args.Split(["\r\n", "\n"], StringSplitOptions.None))
+        var lines = args.Split(["\r\n", "\n"], StringSplitOptions.None).Where(item => !string.IsNullOrEmpty(item)).ToList();
+        for (int i = 0; i < lines.Count; i++)
         {
-            if (string.IsNullOrEmpty(item))
-                continue;
-            output.AppendLine(item);
-            if (output.Length > 200)
+            var line = lines[i];
+            if (lines.Count > 10 && i > 5 && i < lines.Count - 5)
             {
-                output.AppendLine("{ truncated } ...... ");
-                break;
+                if (!is_truncated)
+                {
+                    output.AppendLine("{ truncated }");
+                    is_truncated = true;
+                }
+                continue;
             }
+            output.AppendLine(line);
         }
         Console.ForegroundColor = ConsoleColor.DarkGray;
         Console.WriteLine(output);
