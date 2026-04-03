@@ -1,4 +1,5 @@
 ﻿using System.ClientModel;
+using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
@@ -61,14 +62,24 @@ internal static class ServiceCollectionExtensions
 
         services.AddSingleton<CrsChatClient>(provider =>
         {
+            var logger = provider.GetRequiredService<ILogger<OpenAiOptions>>();
             var options = provider.GetRequiredService<IOptions<OpenAiOptions>>().Value;
+            logger.LogInformation($"BaseUrl:{options.BaseUrl}");
+            logger.LogInformation($"ModelId:{options.ModelId}");
             var client = new OpenAIClient(
                 new ApiKeyCredential(options.ApiKey),
                 new OpenAIClientOptions { Endpoint = new Uri(options.BaseUrl), MessageLoggingPolicy = new LoggingAuthPolicy(false, true) }
             );
-            var baseClient = client.GetResponsesClient(options.ModelId).AsIChatClient();
-            var logger = provider.GetRequiredService<ILogger<CrsChatClient>>();
-            return CrsChatClient.Create(baseClient, logger);
+            var baseClient = client.GetResponsesClient().AsIChatClient(options.ModelId);
+            return CrsChatClient.Create(baseClient);
+        });
+
+        services.AddSingleton<IChatClient>(provider =>
+        {
+            var crsClient = provider.GetRequiredService<CrsChatClient>();
+            var cache = provider.GetRequiredService<IDistributedCache>();
+            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+            return crsClient.AsBuilder().UseDistributedCache(cache).UseLogging(loggerFactory).Build();
         });
 
         services.AddSingleton<IDistributedCache>(provider =>
@@ -94,32 +105,39 @@ internal static class ServiceCollectionExtensions
             return new CompactionProvider(pipeline, loggerFactory: loggerFactory);
         });
 
-        services.AddSingleton<FileAgentSkillsProvider>(provider =>
+        services.AddSingleton<AgentSkillsProvider>(provider =>
         {
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var systemSkills = Path.Combine(AppContext.BaseDirectory, "skills", "system");
             var localUserSkills = Path.Combine(AppContext.BaseDirectory, "skills", "user");
 
-            return new FileAgentSkillsProvider(
-                [systemSkills, localUserSkills],
-                new FileAgentSkillsProviderOptions
+            var defaultInstructions = new StringBuilder(
+                """
+                You have access to skills containing domain-specific knowledge and capabilities.
+                Each skill provides specialized instructions, reference documents, and assets for specific tasks.
+
+                <available_skills>
+                {{skills}}
+                </available_skills>
+
+                When a task aligns with a skill's domain, follow these steps in exact order:
+                - Use `load_skill` to retrieve the skill's instructions.
+                - Follow the provided guidance.
+                {{resource_instructions}}
+                {{script_instructions}}
+                Only load what is needed, when it is needed.
+                """
+            );
+
+            defaultInstructions.AppendLine($"Put the newly added skills in the {localUserSkills} directory.");
+
+            return new AgentSkillsProvider(
+                skillPaths: [systemSkills, localUserSkills],
+                options: new AgentSkillsProviderOptions
                 {
-                    SkillsInstructionPrompt = $"""
-                    You have access to skills containing domain-specific knowledge and capabilities.
-                    Each skill provides specialized instructions, reference documents, and assets for specific tasks.
-
-                    <available_skills>
-                    {0}
-                    </available_skills>
-
-                    When a task aligns with a skill's domain:
-                    1. Use `load_skill` to retrieve the skill's instructions
-                    2. Follow the provided guidance
-                    3. Use `read_skill_resource` to read any references or other files mentioned by the skill
-
-                    Only load what is needed, when it is needed.
-                    Put the newly added skills in the {localUserSkills} directory.
-                    """,
+                    SkillsInstructionPrompt = defaultInstructions.ToString(),
+                    ScriptApproval = false,
+                    DisableCaching = false,
                 },
                 loggerFactory: loggerFactory
             );
@@ -133,16 +151,8 @@ internal static class ServiceCollectionExtensions
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var compactionProvider = provider.GetRequiredService<CompactionProvider>();
             var promptProvider = provider.GetRequiredService<SystemPromptProvider>();
-            var skillsProvider = provider.GetRequiredService<FileAgentSkillsProvider>();
+            var skillsProvider = provider.GetRequiredService<AgentSkillsProvider>();
             return new SubAgentProvider(workDirectory, crsClient, [compactionProvider, promptProvider, skillsProvider], loggerFactory);
-        });
-
-        services.AddSingleton<IChatClient>(provider =>
-        {
-            var crsClient = provider.GetRequiredService<CrsChatClient>();
-            var cache = provider.GetRequiredService<IDistributedCache>();
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            return crsClient.AsBuilder().UseDistributedCache(cache).UseLogging(loggerFactory).Build();
         });
 
         services.AddSingleton<AIAgent>(provider =>
@@ -150,7 +160,7 @@ internal static class ServiceCollectionExtensions
             var options = provider.GetRequiredService<IOptions<AgentOptions>>().Value;
             var compactionProvider = provider.GetRequiredService<CompactionProvider>();
             var promptProvider = provider.GetRequiredService<SystemPromptProvider>();
-            var skillsProvider = provider.GetRequiredService<FileAgentSkillsProvider>();
+            var skillsProvider = provider.GetRequiredService<AgentSkillsProvider>();
             var agentProvider = provider.GetRequiredService<SubAgentProvider>();
             var chatClient = provider.GetRequiredService<IChatClient>();
             return chatClient.AsAIAgent(

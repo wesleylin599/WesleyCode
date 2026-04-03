@@ -30,7 +30,11 @@ public class ToolManager
         ClearTasksFunction,
     ];
 
-    private static async Task<string> Command([Description("命令")] string command, CancellationToken cancellationToken = default)
+    private static async Task<string> Command(
+        [Description("命令")] string command,
+        [Description("返回的字符编码")] string encoding,
+        CancellationToken cancellationToken = default
+    )
     {
         string callback;
         try
@@ -43,13 +47,11 @@ public class ToolManager
 
             var stdout = new StringBuilder();
             var stderr = new StringBuilder();
-            var cli = OperatingSystem.IsWindows()
-                ? Cli.Wrap("powershell").WithArguments(args => args.Add("-NoLogo").Add("-NoProfile").Add("-Command").Add(command))
-                : Cli.Wrap("/bin/bash").WithArguments(args => args.Add("-lc").Add(command));
+            var cli = OperatingSystem.IsWindows() ? Cli.Wrap("powershell").WithArguments(command) : Cli.Wrap("/bin/bash").WithArguments(command);
             cli = cli.WithWorkingDirectory(Directory.GetCurrentDirectory())
                 .WithValidation(CommandResultValidation.None)
-                .WithStandardOutputPipe(PipeTarget.ToStringBuilder(stdout, Encoding.Default))
-                .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr, Encoding.Default));
+                .WithStandardOutputPipe(PipeTarget.ToStringBuilder(stdout, Encoding.GetEncoding(encoding)))
+                .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr, Encoding.GetEncoding(encoding)));
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(1));
@@ -69,7 +71,11 @@ public class ToolManager
         return callback;
     }
 
-    private static async Task<string> ReadFile([Description("文件路径")] string path, CancellationToken cancellationToken = default)
+    private static async Task<string> ReadFile(
+        [Description("文件路径")] string path,
+        [Description("读取的字符编码")] string encoding,
+        CancellationToken cancellationToken = default
+    )
     {
         string callback;
         try
@@ -82,7 +88,7 @@ public class ToolManager
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(1));
-            callback = await File.ReadAllTextAsync(path, Encoding.Default, cts.Token);
+            callback = await File.ReadAllTextAsync(path, Encoding.GetEncoding(encoding), cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -155,7 +161,7 @@ public class ToolManager
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(1));
-            var content = await File.ReadAllTextAsync(path, Encoding.Default, cts.Token);
+            var content = await File.ReadAllTextAsync(path, Encoding.GetEncoding(encoding), cts.Token);
             if (content.Contains(oldText, StringComparison.Ordinal))
             {
                 var index = content.IndexOf(oldText, StringComparison.Ordinal);
