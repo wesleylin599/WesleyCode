@@ -48,6 +48,7 @@ internal static class ServiceCollectionExtensions
             .AddOptions<CompactionOptions>()
             .Configure(config =>
             {
+                config.MessageCountingLimit = 10;
                 config.ToolResultTokenLimit = 1500;
                 config.SummaryTokenLimit = 10000;
                 config.SlidingWindowTurnLimit = 10;
@@ -155,6 +156,14 @@ internal static class ServiceCollectionExtensions
             return new SubAgentProvider(workDirectory, crsClient, [compactionProvider, promptProvider, skillsProvider], loggerFactory);
         });
 
+        services.AddSingleton<ChatHistoryProvider>(provider =>
+        {
+            var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
+            return new InMemoryChatHistoryProvider(
+                new InMemoryChatHistoryProviderOptions { ChatReducer = new MessageCountingChatReducer(compactionOptions.MessageCountingLimit) }
+            );
+        });
+
         services.AddSingleton<AIAgent>(provider =>
         {
             var options = provider.GetRequiredService<IOptions<AgentOptions>>().Value;
@@ -162,6 +171,7 @@ internal static class ServiceCollectionExtensions
             var promptProvider = provider.GetRequiredService<SystemPromptProvider>();
             var skillsProvider = provider.GetRequiredService<AgentSkillsProvider>();
             var agentProvider = provider.GetRequiredService<SubAgentProvider>();
+            var chatProvider = provider.GetRequiredService<ChatHistoryProvider>();
             var chatClient = provider.GetRequiredService<IChatClient>();
             return chatClient.AsAIAgent(
                 options: new ChatClientAgentOptions
@@ -176,6 +186,7 @@ internal static class ServiceCollectionExtensions
                         AllowMultipleToolCalls = true,
                     },
                     AIContextProviders = [compactionProvider, promptProvider, skillsProvider, agentProvider],
+                    ChatHistoryProvider = chatProvider,
                 }
             );
         });
@@ -183,6 +194,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IAgentRunner, AgentRunner>();
         services.AddSingleton<ISessionStore, SessionStore>();
         services.AddHostedService<ConsoleAgentHostedService>();
+
         return services;
     }
 }

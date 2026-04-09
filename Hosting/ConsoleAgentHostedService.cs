@@ -75,6 +75,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         {
             try
             {
+                await Task.Delay(100, stoppingToken);
                 Console.Write("> User : ");
                 var input = Console.ReadLine();
                 if (string.IsNullOrEmpty(input))
@@ -145,8 +146,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     target = $"> User : {message}";
                 else if (message.Role == ChatRole.Assistant)
                     target = $"> Agent: {message}";
-                else
-                    target = $"> {message.Role}: {message}";
                 cancellationToken.ThrowIfCancellationRequested();
                 Console.WriteLine(target);
             }
