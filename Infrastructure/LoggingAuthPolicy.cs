@@ -1,4 +1,4 @@
-using System.ClientModel.Primitives;
+﻿using System.ClientModel.Primitives;
 using System.Diagnostics;
 using System.Text;
 

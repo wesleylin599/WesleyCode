@@ -153,7 +153,7 @@ internal static class ServiceCollectionExtensions
             var compactionProvider = provider.GetRequiredService<CompactionProvider>();
             var promptProvider = provider.GetRequiredService<SystemPromptProvider>();
             var skillsProvider = provider.GetRequiredService<AgentSkillsProvider>();
-            return new SubAgentProvider(workDirectory, crsClient, [compactionProvider, promptProvider, skillsProvider], loggerFactory);
+            return new SubAgentProvider(crsClient, [compactionProvider, promptProvider, skillsProvider], loggerFactory);
         });
 
         services.AddSingleton<ChatHistoryProvider>(provider =>
@@ -179,11 +179,12 @@ internal static class ServiceCollectionExtensions
                     Name = options.Name,
                     ChatOptions = new ChatOptions
                     {
+                        Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Low, Output = ReasoningOutput.Full },
                         Instructions = options.Instructions,
-                        Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High },
                         Tools = ToolManager.AllFunctions,
                         ToolMode = ChatToolMode.Auto,
                         AllowMultipleToolCalls = true,
+                        MaxOutputTokens = 10000,
                     },
                     AIContextProviders = [compactionProvider, promptProvider, skillsProvider, agentProvider],
                     ChatHistoryProvider = chatProvider,

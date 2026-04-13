@@ -1,6 +1,6 @@
-using System.Collections.Concurrent;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Text;
+using System.Text.RegularExpressions;
 using CliWrap;
 using Microsoft.Extensions.AI;
 
@@ -8,33 +8,20 @@ namespace TestConsole5.Services;
 
 public class ToolManager
 {
-    private static readonly ConcurrentQueue<TaskItem> _tasks = new();
-    public static AITool CommandFunction = AIFunctionFactory.Create(Command, null, "命令行工具,禁止执行文件读写,超时一分钟");
-    public static AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile, null, "写入文件内容,必要时创建目录,超时一分钟");
-    public static AITool EditFileFunction = AIFunctionFactory.Create(EditFile, null, "替换文件中的精确文本,仅替换第一次匹配,超时一分钟");
-    public static AITool ReadFileFunction = AIFunctionFactory.Create(ReadFile, null, "读取文本文件内容,超时一分钟");
-    public static AITool EnqueueTaskFunction = AIFunctionFactory.Create(EnqueueTask, null, "添加任务到队列中");
-    public static AITool DequeueTaskFunction = AIFunctionFactory.Create(DequeueTask, null, "从队列中取出任务");
-    public static AITool SelectTasksFunction = AIFunctionFactory.Create(SelectTasks, null, "获取任务队列列表");
-    public static AITool ClearTasksFunction = AIFunctionFactory.Create(ClearTasks, null, "清理任务队列列表");
+    private static List<TaskItem> _task = new List<TaskItem>();
 
-    public static readonly AITool[] AllFunctions =
-    [
-        CommandFunction,
-        ReadFileFunction,
-        WriteFileFunction,
-        EditFileFunction,
-        EnqueueTaskFunction,
-        DequeueTaskFunction,
-        SelectTasksFunction,
-        ClearTasksFunction,
-    ];
+    public static AITool CommandFunction = AIFunctionFactory.Create(Command);
+    public static AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile);
+    public static AITool EditFileFunction = AIFunctionFactory.Create(EditFile);
+    public static AITool ReadFileFunction = AIFunctionFactory.Create(ReadFile);
+    public static AITool ReadTasksFunction = AIFunctionFactory.Create(ReadTasks);
+    public static AITool UpdateTasksFunction = AIFunctionFactory.Create(UpdateTasks);
 
-    private static async Task<string> Command(
-        [Description("命令")] string command,
-        [Description("返回的字符编码")] string encoding,
-        CancellationToken cancellationToken = default
-    )
+    public static readonly AITool[] ReadFunctions = [CommandFunction, ReadFileFunction, ReadTasksFunction];
+    public static readonly AITool[] AllFunctions = [.. ReadFunctions, WriteFileFunction, EditFileFunction, UpdateTasksFunction];
+
+    [Description("命令行工具(Windows系统使用`powershell`;其他系统为`/bin/bash`),禁止用于文件读写,超时一分钟")]
+    private static async Task<string> Command([Description("命令")] string command, CancellationToken cancellationToken = default)
     {
         string callback;
         try
@@ -50,8 +37,8 @@ public class ToolManager
             var cli = OperatingSystem.IsWindows() ? Cli.Wrap("powershell").WithArguments(command) : Cli.Wrap("/bin/bash").WithArguments(command);
             cli = cli.WithWorkingDirectory(Directory.GetCurrentDirectory())
                 .WithValidation(CommandResultValidation.None)
-                .WithStandardOutputPipe(PipeTarget.ToStringBuilder(stdout, Encoding.GetEncoding(encoding)))
-                .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr, Encoding.GetEncoding(encoding)));
+                .WithStandardOutputPipe(PipeTarget.ToStringBuilder(stdout))
+                .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr));
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(1));
@@ -71,11 +58,8 @@ public class ToolManager
         return callback;
     }
 
-    private static async Task<string> ReadFile(
-        [Description("文件路径")] string path,
-        [Description("读取的字符编码")] string encoding,
-        CancellationToken cancellationToken = default
-    )
+    [Description("读取文件内容并返回实际字符编码,超时一分钟")]
+    private static async Task<string> ReadFile([Description("文件路径")] string path, CancellationToken cancellationToken = default)
     {
         string callback;
         try
@@ -88,7 +72,17 @@ public class ToolManager
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(1));
-            callback = await File.ReadAllTextAsync(path, Encoding.GetEncoding(encoding), cts.Token);
+
+            using (var reader = new StreamReader(path, true))
+            {
+                var encoding = reader.CurrentEncoding.WebName;
+                var content = await reader.ReadToEndAsync(cts.Token);
+                callback = $"""
+                    Readed {path}.
+                    encoding: {encoding}
+                    content: {content}
+                    """;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -98,10 +92,12 @@ public class ToolManager
         {
             callback = $"Error: {ex.Message}";
         }
+
         EmitToolEvent(callback);
         return callback;
     }
 
+    [Description("写入文件内容,必要时创建目录,超时一分钟")]
     private static async Task<string> WriteFile(
         [Description("文件路径")] string path,
         [Description("文本内容")] string content,
@@ -126,7 +122,7 @@ public class ToolManager
             cts.CancelAfter(TimeSpan.FromMinutes(1));
             await File.WriteAllTextAsync(path, content, Encoding.GetEncoding(encoding), cts.Token);
             callback = $"""
-                Wrote {content.Length} bytes to {path}.
+                Wrote {content.Length} bytes to {path} {encoding}.
                 {content}
                 """;
         }
@@ -142,9 +138,10 @@ public class ToolManager
         return callback;
     }
 
+    [Description("使用正则替换文件内容,默认只替换第一次,超时一分钟")]
     private static async Task<string> EditFile(
         [Description("文件路径")] string path,
-        [Description("旧文本内容")] string oldText,
+        [Description("正则表达式")] string pattern,
         [Description("新文本内容")] string newText,
         [Description("写入的字符编码")] string encoding,
         CancellationToken cancellationToken = default
@@ -156,26 +153,30 @@ public class ToolManager
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.Write("$ edit ");
             Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.WriteLine(path);
+            Console.WriteLine($"{path}");
             Console.ResetColor();
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(1));
-            var content = await File.ReadAllTextAsync(path, Encoding.GetEncoding(encoding), cts.Token);
-            if (content.Contains(oldText, StringComparison.Ordinal))
+
+            var enc = Encoding.GetEncoding(encoding);
+            var content = await File.ReadAllTextAsync(path, enc, cts.Token);
+
+            var regex = new Regex(pattern, RegexOptions.Multiline);
+
+            if (!regex.IsMatch(content))
             {
-                var index = content.IndexOf(oldText, StringComparison.Ordinal);
-                var newContent = content[..index] + newText + content[(index + oldText.Length)..];
-                await File.WriteAllTextAsync(path, newContent, Encoding.GetEncoding(encoding), cts.Token);
-                callback = $"""
-                    Edited {path} {oldText.Length} => {newText.Length}.
-                    oldText: {oldText}  
-                    newText: {newText}
-                    """;
+                callback = $"Error: 在 {path} 中未匹配到正则";
             }
             else
             {
-                callback = $"Error: 在 {path} 中未找到匹配文本";
+                await File.WriteAllTextAsync(path, regex.Replace(content, newText), enc, cts.Token);
+
+                callback = $"""
+                    Edited {newText.Length} bytes to {path} {encoding}.
+                    pattern: {pattern}
+                    newText: {newText}
+                    """;
             }
         }
         catch (OperationCanceledException)
@@ -186,59 +187,33 @@ public class ToolManager
         {
             callback = $"Error: {ex.Message}";
         }
+
         EmitToolEvent(callback);
         return callback;
     }
 
-    private static string EnqueueTask([Description("任务内容")] TaskItem item)
+    [Description("更新任务清单,调用需要传入完整的工作清单,任务状态只有: 未开始, 进行中, 已完成")]
+    private static string UpdateTasks([Description("任务清单列表")] List<TaskItem> tasks)
     {
+        _task.Clear();
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.Write("$ enqueue task ");
-        Console.ForegroundColor = ConsoleColor.DarkYellow;
-        Console.WriteLine(item.Content);
-        Console.ForegroundColor = ConsoleColor.DarkGreen;
-        Console.WriteLine($"status: {item.Status} result: {item.Result}");
+        Console.WriteLine("$ chage tasks ");
         Console.ResetColor();
-
-        _tasks.Enqueue(item);
-        return $"{item.Content} 任务添加完成";
+        foreach (var item in tasks)
+        {
+            _task.Add(item);
+            Console.WriteLine($"[{item.Status}]{item.Title}");
+        }
+        return "完成更新";
     }
 
-    private static TaskItem DequeueTask()
-    {
-        if (!_tasks.TryDequeue(out var item))
-            return new TaskItem("获取失败", "Error", "Error");
-
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.Write("$ take task ");
-        Console.ForegroundColor = ConsoleColor.DarkYellow;
-        Console.WriteLine(item.Content);
-        Console.ForegroundColor = ConsoleColor.DarkGreen;
-        Console.WriteLine($"status: {item.Status} result: {item.Result}");
-        Console.ResetColor();
-
-        return item;
-    }
-
-    private static List<TaskItem> SelectTasks()
+    [Description("获取任务清单")]
+    private static List<TaskItem> ReadTasks()
     {
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine($"$ select task count {_tasks.Count}");
+        Console.WriteLine($"$ read {_task.Count} tasks ");
         Console.ResetColor();
-
-        return _tasks.ToList();
-    }
-
-    private static string ClearTasks()
-    {
-        var count = _tasks.Count;
-
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine($"$ clear task count {count}");
-        Console.ResetColor();
-
-        _tasks.Clear();
-        return $"清理 {count} 条任务添加完成";
+        return _task;
     }
 
     private static void EmitToolEvent(string args)
@@ -266,8 +241,9 @@ public class ToolManager
     }
 
     private record TaskItem(
+        [Description("任务标题")] string Title,
+        [Description("任务状态")] string Status,
         [Description("任务详情")] string Content,
-        [Description("任务清单")] string Status,
         [Description("执行结果")] string Result
     );
 }

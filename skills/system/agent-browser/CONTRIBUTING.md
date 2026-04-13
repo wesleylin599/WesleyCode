@@ -1,4 +1,4 @@
-# Contributing to Agent Browser Skill
+﻿# Contributing to Agent Browser Skill
 
 This skill wraps the agent-browser CLI. Determine where the problem lies before reporting issues.
 

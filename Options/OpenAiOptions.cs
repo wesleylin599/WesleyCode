@@ -1,4 +1,4 @@
-namespace TestConsole5.Options;
+﻿namespace TestConsole5.Options;
 
 internal sealed class OpenAiOptions
 {

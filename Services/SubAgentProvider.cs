@@ -1,9 +1,8 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Security;
 using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace TestConsole5.Services;
@@ -17,35 +16,53 @@ internal class SubAgentProvider : AIContextProvider
         {0}
         </available_agents>
 
-        当任务有匹配的智能体时:
-        1.使用 'use_subAgent' 调用子代理.
-        2.总结执行的结果.
-
-        子代理拥有独立的上下文.
+        使用`use_subAgent`调用子代理.
         多步骤任务优先使用子代理.
+        子代理拥有独立的上下文.
         """;
 
     private static readonly AgentContent planner = new AgentContent(
         "planner",
-        "规划代理,用于设计实现策略,任务清单需由执行代理获取",
-        "你是一个规划代理.获取所需要的信息并将任务添加到任务队列中,每个任务需要可独立执行,列表添加完成输出已添加到任务清单即可.不要做更改.",
-        [ToolManager.CommandFunction, ToolManager.ReadFileFunction, ToolManager.EnqueueTaskFunction, ToolManager.SelectTasksFunction]
+        "规划代理,用于设计实现任务清单,使用示例`use_subAgent(planner,<需求>)`",
+        """
+        你是一个规划代理.设计实现任务清单.不要做更改.
+        要求:
+        将任务添加到任务队列中.
+        每个任务需要可独立执行.
+        任务总数不要超过 10 条.
+        完成后更新任务清单.
+        只输出`已更新任务清单`.
+        """,
+        [.. ToolManager.ReadFunctions, ToolManager.UpdateTasksFunction],
+        new ReasoningOptions { Effort = ReasoningEffort.Low, Output = ReasoningOutput.Summary }
     );
     private static readonly AgentContent executor = new AgentContent(
         "executor",
-        "执行代理,用于执行任务实现功能,使用时传入`获取一条任务并完成`需要时传入一些已知信息,使用前先使用规划代理",
-        "你是一个执行代理.从任务队列中获取任务,高效地实现请求的更改,更新任务清单的执行结果,完成输出已完成任务即可.",
-        ToolManager.AllFunctions
+        "执行代理,用于执行任务,每次只执行一条任务,使用示例`use_subAgent(executor,<任务标题>)`",
+        """
+        你是一个执行代理.高效简洁地完成任务.
+        要求:
+        从任务队列中获取任务标题对应任务并完成它.
+        每次只执行一条任务,完成后更新任务清单.
+        只输出`已更新任务清单`.
+        """,
+        ToolManager.AllFunctions,
+        new ReasoningOptions { Effort = ReasoningEffort.High, Output = ReasoningOutput.Summary }
     );
     private static readonly AgentContent reviewer = new AgentContent(
         "reviewer",
-        "审阅代理,用于对任务完成度进行评估,执行代理使用后调用本代理",
-        "你是一个审阅代理.从任务队列中获取任务,评估任务完成度,输出评估结论.不要做更改.",
-        [ToolManager.CommandFunction, ToolManager.ReadFileFunction, ToolManager.SelectTasksFunction]
+        "审阅代理,用于对任务完成度进行评估,使用示例`use_subAgent(reviewer,<根据任务清单进行评估>)`",
+        """
+        你是一个审阅代理,评估任务完成度,不要做更改.
+        要求:
+        根据需求和执行结果完成评估.
+        输出评估结论.
+        """,
+        ToolManager.ReadFunctions,
+        new ReasoningOptions { Effort = ReasoningEffort.Medium, Output = ReasoningOutput.Full }
     );
 
-    private static readonly List<AgentContent> _agentContents = [planner, executor, reviewer];
-    private static readonly Dictionary<string, AgentContent> _agents = new(StringComparer.OrdinalIgnoreCase)
+    private readonly Dictionary<string, AgentContent> _agents = new(StringComparer.OrdinalIgnoreCase)
     {
         [planner.Name] = planner,
         [executor.Name] = executor,
@@ -54,14 +71,12 @@ internal class SubAgentProvider : AIContextProvider
 
     private readonly AITool[] _tools;
     private readonly IChatClient _client;
-    private readonly string _workDirectory;
     private readonly AIContextProvider[] _providers;
     private readonly ILogger<SubAgentProvider> _logger;
 
-    public SubAgentProvider(string workDirectory, IChatClient client, AIContextProvider[]? providers = null, ILoggerFactory? loggerFactory = null)
+    public SubAgentProvider(IChatClient client, AIContextProvider[]? providers = null, ILoggerFactory? loggerFactory = null)
     {
         _client = client;
-        _workDirectory = workDirectory;
         _providers = providers ?? [];
         _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<SubAgentProvider>();
         _tools = [AIFunctionFactory.Create(this.UseSubAgentAsync, name: "use_subAgent", description: "调用子代理,获取子代理执行结果.")];
@@ -70,28 +85,32 @@ internal class SubAgentProvider : AIContextProvider
     protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
         var sb = new StringBuilder();
-        foreach (var agentContent in _agentContents)
+        foreach (var agentContent in _agents.Values)
         {
             sb.AppendLine("  <agent>");
             sb.AppendLine($"    <name>{SecurityElement.Escape(agentContent.Name)}</name>");
             sb.AppendLine($"    <description>{SecurityElement.Escape(agentContent.Description)}</description>");
             sb.AppendLine($"    <tools>");
-            foreach (var tool in agentContent.Tools)
+            if (agentContent.Tools is not null)
             {
-                sb.AppendLine($"        <tool>");
-                sb.AppendLine($"            <name>{SecurityElement.Escape(tool.Name)}</name>");
-                sb.AppendLine($"            <description>{SecurityElement.Escape(tool.Description)}</description>");
-                sb.AppendLine($"        </tool>");
+                foreach (var tool in agentContent.Tools)
+                {
+                    sb.AppendLine($"        <tool>");
+                    sb.AppendLine($"            <name>{SecurityElement.Escape(tool.Name)}</name>");
+                    sb.AppendLine($"            <description>{SecurityElement.Escape(tool.Description)}</description>");
+                    sb.AppendLine($"        </tool>");
+                }
             }
             sb.AppendLine($"    </tools>");
             sb.AppendLine("  </agent>");
+            _logger.LogInformation($"Loaded subAgent: {agentContent.Name}");
         }
-
+        _logger.LogInformation($"Successfully loaded {_agents.Count} subAgent");
         var instructionPrompt = string.Format(DefaultInstructionPrompt, sb.ToString().TrimEnd());
         return new AIContext { Instructions = instructionPrompt, Tools = this._tools };
     }
 
-    private record AgentContent(string Name, string Description, string Instructions, AITool[] Tools);
+    private record AgentContent(string Name, string Description, string Instructions, AITool[] Tools, ReasoningOptions? Reasoning = null);
 
     private async Task<string> UseSubAgentAsync(
         [Description("子代理名称")] string name,
@@ -102,7 +121,14 @@ internal class SubAgentProvider : AIContextProvider
         if (!_agents.TryGetValue(name, out var content))
             return "Error: 未找到该子代理.";
 
-        _logger.LogInformation($"{content.Name} request: {input}");
+        _logger.LogInformation(
+            $"""
+            {content.Name} request: 
+            {input}
+            """
+        );
+
+        var reasoning = content.Reasoning ?? new ReasoningOptions();
 
         AIAgent subAgent = _client.AsAIAgent(
             options: new ChatClientAgentOptions
@@ -112,25 +138,26 @@ internal class SubAgentProvider : AIContextProvider
                 ChatOptions = new ChatOptions
                 {
                     Instructions = content.Instructions,
-                    Tools = content.Tools,
-                    ToolMode = ChatToolMode.Auto,
                     AllowMultipleToolCalls = true,
+                    ToolMode = ChatToolMode.Auto,
+                    MaxOutputTokens = 10000,
+                    Tools = content.Tools,
+                    Reasoning = reasoning,
                 },
                 AIContextProviders = _providers,
             }
         );
         var session = await subAgent.CreateSessionAsync(cancellationToken);
 
-        var chatMeaasges = new List<ChatMessage>()
-        {
-            new ChatMessage(ChatRole.User, $"你是位于 {_workDirectory} 的子代理"),
-            new ChatMessage(ChatRole.User, input),
-        };
+        var response = await subAgent.RunAsync(input, session, cancellationToken: cancellationToken);
 
-        var response = await subAgent.RunAsync(chatMeaasges, session, new() { ResponseFormat = ChatResponseFormat.Text }, cancellationToken);
+        _logger.LogInformation(
+            $"""
+            {content.Name} response: 
+            {response}
+            """
+        );
 
-        _logger.LogInformation($"{content.Name} response: {response}");
-
-        return response.Text;
+        return string.IsNullOrEmpty(response.Text) ? "Error:未获取到输出结果" : response.Text;
     }
 }
