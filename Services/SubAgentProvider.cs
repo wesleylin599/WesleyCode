@@ -34,7 +34,7 @@ internal class SubAgentProvider : AIContextProvider
         只输出`已更新任务清单`.
         """,
         [.. ToolManager.ReadFunctions, ToolManager.UpdateTasksFunction],
-        new ReasoningOptions { Effort = ReasoningEffort.Low, Output = ReasoningOutput.Summary }
+        new ReasoningOptions { Effort = ReasoningEffort.High, Output = ReasoningOutput.Summary }
     );
     private static readonly AgentContent executor = new AgentContent(
         "executor",
@@ -47,7 +47,7 @@ internal class SubAgentProvider : AIContextProvider
         只输出`已更新任务清单`.
         """,
         ToolManager.AllFunctions,
-        new ReasoningOptions { Effort = ReasoningEffort.High, Output = ReasoningOutput.Summary }
+        new ReasoningOptions { Effort = ReasoningEffort.Low, Output = ReasoningOutput.Summary }
     );
     private static readonly AgentContent reviewer = new AgentContent(
         "reviewer",
@@ -59,7 +59,7 @@ internal class SubAgentProvider : AIContextProvider
         输出评估结论.
         """,
         ToolManager.ReadFunctions,
-        new ReasoningOptions { Effort = ReasoningEffort.Medium, Output = ReasoningOutput.Full }
+        new ReasoningOptions { Effort = ReasoningEffort.Low, Output = ReasoningOutput.Full }
     );
 
     private readonly Dictionary<string, AgentContent> _agents = new(StringComparer.OrdinalIgnoreCase)

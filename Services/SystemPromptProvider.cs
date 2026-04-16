@@ -20,6 +20,7 @@ internal class SystemPromptProvider : AIContextProvider
         var main = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _promptName);
         var builder = new StringBuilder();
         builder.AppendLine($"你是位于 {_workDirectory} 的代理工具,使用中文输出;");
+        builder.AppendLine("操作时要求简洁高效,最小改动实现需求");
         if (File.Exists(local))
         {
             var prompt = await File.ReadAllTextAsync(local);

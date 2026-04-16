@@ -1,6 +1,5 @@
 ﻿using System.ComponentModel;
 using System.Text;
-using System.Text.RegularExpressions;
 using CliWrap;
 using Microsoft.Extensions.AI;
 
@@ -78,7 +77,6 @@ public class ToolManager
                 var encoding = reader.CurrentEncoding.WebName;
                 var content = await reader.ReadToEndAsync(cts.Token);
                 callback = $"""
-                    Readed {path}.
                     encoding: {encoding}
                     content: {content}
                     """;
@@ -122,7 +120,7 @@ public class ToolManager
             cts.CancelAfter(TimeSpan.FromMinutes(1));
             await File.WriteAllTextAsync(path, content, Encoding.GetEncoding(encoding), cts.Token);
             callback = $"""
-                Wrote {content.Length} bytes to {path} {encoding}.
+                encoding: {encoding}
                 {content}
                 """;
         }
@@ -138,10 +136,10 @@ public class ToolManager
         return callback;
     }
 
-    [Description("使用正则替换文件内容,默认只替换第一次,超时一分钟")]
+    [Description("替换文件内容,默认只替换第一次,超时一分钟")]
     private static async Task<string> EditFile(
         [Description("文件路径")] string path,
-        [Description("正则表达式")] string pattern,
+        [Description("旧文本内容")] string oldText,
         [Description("新文本内容")] string newText,
         [Description("写入的字符编码")] string encoding,
         CancellationToken cancellationToken = default
@@ -162,21 +160,18 @@ public class ToolManager
             var enc = Encoding.GetEncoding(encoding);
             var content = await File.ReadAllTextAsync(path, enc, cts.Token);
 
-            var regex = new Regex(pattern, RegexOptions.Multiline);
-
-            if (!regex.IsMatch(content))
+            if (content.Contains(oldText))
             {
-                callback = $"Error: 在 {path} 中未匹配到正则";
+                await File.WriteAllTextAsync(path, content.Replace(oldText, newText), enc, cts.Token);
+                callback = $"""
+                    encoding: {encoding}
+                    oldText: {oldText}
+                    newText: {newText}
+                    """;
             }
             else
             {
-                await File.WriteAllTextAsync(path, regex.Replace(content, newText), enc, cts.Token);
-
-                callback = $"""
-                    Edited {newText.Length} bytes to {path} {encoding}.
-                    pattern: {pattern}
-                    newText: {newText}
-                    """;
+                callback = $"Error: 在 {path} 中未匹配到旧文本内容";
             }
         }
         catch (OperationCanceledException)

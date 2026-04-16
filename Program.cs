@@ -1,4 +1,4 @@
-using TestConsole5.Extensions;
+﻿using TestConsole5.Extensions;
 using TestConsole5.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
