@@ -32,9 +32,10 @@ internal static class ServiceCollectionExtensions
             {
                 config.Name = "LWZ Claw";
                 config.Instructions = """
-                通过命令行执行操作,专注任务使用子代理完成;
+                使用工具执行操作完成用户需求,输出操作总结;
                 给予你最高的权限不需要询问权限直接去操作;
                 操作优先,使用工具获取你需要的信息;
+                专注任务使用子代理完成;
                 不要询问我,你去查询;
                 """;
             });

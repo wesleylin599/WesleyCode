@@ -23,12 +23,12 @@ internal class SystemPromptProvider : AIContextProvider
         builder.AppendLine("操作时要求简洁高效,最小改动实现需求");
         if (File.Exists(local))
         {
-            var prompt = await File.ReadAllTextAsync(local);
+            var prompt = await File.ReadAllTextAsync(local, cancellationToken);
             builder.AppendLine(prompt);
         }
         if (File.Exists(main))
         {
-            var prompt = await File.ReadAllTextAsync(main);
+            var prompt = await File.ReadAllTextAsync(main, cancellationToken);
             builder.AppendLine(prompt);
         }
         return new AIContext { Instructions = builder.ToString() };
