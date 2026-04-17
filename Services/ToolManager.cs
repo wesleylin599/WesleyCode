@@ -7,20 +7,22 @@ namespace TestConsole5.Services;
 
 public class ToolManager
 {
-    private static List<TaskItem> _task = new List<TaskItem>();
+    private const int MAX_LOG_LINE = 10;
+    private const int MAX_LOG_LENGTH = 30000;
+
+    private static readonly List<TaskItem> _task = new();
 
     public static AITool CommandFunction = AIFunctionFactory.Create(Command);
     public static AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile);
-    public static AITool EditFileFunction = AIFunctionFactory.Create(EditFile);
     public static AITool ReadFileFunction = AIFunctionFactory.Create(ReadFile);
     public static AITool ReadTasksFunction = AIFunctionFactory.Create(ReadTasks);
     public static AITool UpdateTasksFunction = AIFunctionFactory.Create(UpdateTasks);
 
     public static readonly AITool[] ReadFunctions = [CommandFunction, ReadFileFunction, ReadTasksFunction];
-    public static readonly AITool[] AllFunctions = [.. ReadFunctions, WriteFileFunction, EditFileFunction, UpdateTasksFunction];
+    public static readonly AITool[] AllFunctions = [.. ReadFunctions, WriteFileFunction, UpdateTasksFunction];
 
-    [Description("命令行工具(Windows系统使用`powershell`;其他系统为`/bin/bash`),禁止用于文件读写,超时一分钟")]
-    private static async Task<string> Command([Description("命令")] string command, CancellationToken cancellationToken = default)
+    [Description("命令行工具,用于执行命令操作,超时一分钟")]
+    private static async Task<string> Command([Description("命令,禁止文件读写命令")] string command, CancellationToken cancellationToken = default)
     {
         string callback;
         try
@@ -43,7 +45,7 @@ public class ToolManager
             cts.CancelAfter(TimeSpan.FromMinutes(1));
             var result = await cli.ExecuteAsync(cts.Token);
 
-            callback = $"[{result.ExitCode}]{stdout.ToString()}{stderr.ToString()}";
+            callback = $"[{result.ExitCode}]{stdout}{stderr}";
         }
         catch (OperationCanceledException)
         {
@@ -53,8 +55,8 @@ public class ToolManager
         {
             callback = $"Error: {ex.Message}";
         }
-        EmitToolEvent(callback);
-        return callback;
+        ToolConsoleLog(callback);
+        return ToolResult(callback);
     }
 
     [Description("读取文件内容并返回实际字符编码,超时一分钟")]
@@ -64,7 +66,7 @@ public class ToolManager
         try
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write("$ read ");
+            Console.Write("$ read file ");
             Console.ForegroundColor = ConsoleColor.DarkYellow;
             Console.WriteLine(path);
             Console.ResetColor();
@@ -72,15 +74,19 @@ public class ToolManager
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(1));
 
-            using (var reader = new StreamReader(path, true))
+            using var reader = new StreamReader(path, true);
+            var encoding = reader.CurrentEncoding.WebName;
+            var content = await reader.ReadToEndAsync(cts.Token);
+            StringBuilder stringBuilder = new StringBuilder();
+            var lines = content.Split(["\r\n", "\n"], StringSplitOptions.None).ToList();
+            for (int i = 0; i < lines.Count; i++)
             {
-                var encoding = reader.CurrentEncoding.WebName;
-                var content = await reader.ReadToEndAsync(cts.Token);
-                callback = $"""
-                    encoding: {encoding}
-                    content: {content}
-                    """;
+                stringBuilder.AppendLine($"[{i}] {lines[i]}");
             }
+            callback = $"""
+                encoding: {encoding}
+                {stringBuilder}
+                """;
         }
         catch (OperationCanceledException)
         {
@@ -91,14 +97,14 @@ public class ToolManager
             callback = $"Error: {ex.Message}";
         }
 
-        EmitToolEvent(callback);
-        return callback;
+        ToolConsoleLog(callback);
+        return ToolResult(callback);
     }
 
-    [Description("写入文件内容,必要时创建目录,超时一分钟")]
+    [Description("按照行号操作文件内容,必要时创建目录,超时一分钟")]
     private static async Task<string> WriteFile(
         [Description("文件路径")] string path,
-        [Description("文本内容")] string content,
+        [Description("行操作列表")] List<LineItem> contents,
         [Description("写入的字符编码")] string encoding,
         CancellationToken cancellationToken = default
     )
@@ -107,72 +113,54 @@ public class ToolManager
         try
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write("$ write ");
-            Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.WriteLine(path);
-            Console.ResetColor();
-
-            var dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrWhiteSpace(dir))
-                Directory.CreateDirectory(dir);
-
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromMinutes(1));
-            await File.WriteAllTextAsync(path, content, Encoding.GetEncoding(encoding), cts.Token);
-            callback = $"""
-                encoding: {encoding}
-                {content}
-                """;
-        }
-        catch (OperationCanceledException)
-        {
-            callback = "Error: 写入文件已取消";
-        }
-        catch (Exception ex)
-        {
-            callback = $"Error: {ex.Message}";
-        }
-        EmitToolEvent(callback);
-        return callback;
-    }
-
-    [Description("替换文件内容,默认只替换第一次,超时一分钟")]
-    private static async Task<string> EditFile(
-        [Description("文件路径")] string path,
-        [Description("旧文本内容")] string oldText,
-        [Description("新文本内容")] string newText,
-        [Description("写入的字符编码")] string encoding,
-        CancellationToken cancellationToken = default
-    )
-    {
-        string callback;
-        try
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write("$ edit ");
+            Console.Write("$ write file ");
             Console.ForegroundColor = ConsoleColor.DarkYellow;
             Console.WriteLine($"{path}");
             Console.ResetColor();
 
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromMinutes(1));
 
-            var enc = Encoding.GetEncoding(encoding);
-            var content = await File.ReadAllTextAsync(path, enc, cts.Token);
+            var content = File.Exists(path) ? await File.ReadAllTextAsync(path, Encoding.GetEncoding(encoding), cts.Token) : string.Empty;
+            var lines = content.Split(["\r\n", "\n"], StringSplitOptions.None).ToList();
 
-            if (content.Contains(oldText))
+            StringBuilder stringBuilder = new StringBuilder();
+            foreach (var line in contents)
             {
-                await File.WriteAllTextAsync(path, content.Replace(oldText, newText), enc, cts.Token);
-                callback = $"""
-                    encoding: {encoding}
-                    oldText: {oldText}
-                    newText: {newText}
-                    """;
+                var index = line.LineNumber;
+                var target = line.Content.Split(["\r\n", "\n"], StringSplitOptions.None);
+                foreach (var item in target)
+                {
+                    if (string.IsNullOrWhiteSpace(item))
+                        continue;
+                    switch (line.Operation)
+                    {
+                        case LineOperation.Add:
+                            stringBuilder.AppendLine($"[{index}] ADDED {item}");
+                            lines.Insert(index, item);
+                            break;
+                        case LineOperation.Update:
+                            stringBuilder.AppendLine($"[{index}] UPDATED {lines[index]} => {item}");
+                            lines[index] = item;
+                            break;
+                        case LineOperation.Delete:
+                            stringBuilder.AppendLine($"[{index}] DELETED");
+                            lines.RemoveAt(index);
+                            break;
+                    }
+                }
             }
-            else
-            {
-                callback = $"Error: 在 {path} 中未匹配到旧文本内容";
-            }
+
+            await File.WriteAllTextAsync(path, string.Join(Environment.NewLine, lines), Encoding.GetEncoding(encoding), cts.Token);
+
+            callback = $"""
+                encoding: {encoding}
+                {stringBuilder}
+                """;
         }
         catch (OperationCanceledException)
         {
@@ -183,8 +171,8 @@ public class ToolManager
             callback = $"Error: {ex.Message}";
         }
 
-        EmitToolEvent(callback);
-        return callback;
+        ToolConsoleLog(callback);
+        return ToolResult(callback);
     }
 
     [Description("更新任务清单,调用需要传入完整的工作清单,任务状态只有: 未开始, 进行中, 已完成")]
@@ -211,7 +199,7 @@ public class ToolManager
         return _task;
     }
 
-    private static void EmitToolEvent(string args)
+    private static void ToolConsoleLog(string args)
     {
         bool is_truncated = false;
         var output = new StringBuilder();
@@ -219,7 +207,7 @@ public class ToolManager
         for (int i = 0; i < lines.Count; i++)
         {
             var line = lines[i];
-            if (lines.Count > 10 && i > 5 && i < lines.Count - 5)
+            if (lines.Count > MAX_LOG_LINE && i > MAX_LOG_LINE / 2 && i < lines.Count - MAX_LOG_LINE / 2)
             {
                 if (!is_truncated)
                 {
@@ -230,15 +218,34 @@ public class ToolManager
             }
             output.AppendLine(line);
         }
+
         Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine(output);
+        Console.WriteLine(ToolResult(output.ToString()));
         Console.ResetColor();
     }
 
-    private record TaskItem(
+    private static string ToolResult(string args)
+    {
+        return args.Length > MAX_LOG_LENGTH ? $"{args[..MAX_LOG_LENGTH]} ..." : args;
+    }
+
+    private readonly record struct LineItem(
+        [Description("行号")] int LineNumber,
+        [Description("行内容")] string Content,
+        [Description("行操作")] LineOperation Operation
+    );
+
+    private readonly record struct TaskItem(
         [Description("任务标题")] string Title,
         [Description("任务状态")] string Status,
         [Description("任务详情")] string Content,
         [Description("执行结果")] string Result
     );
+
+    private enum LineOperation
+    {
+        Add,
+        Update,
+        Delete,
+    }
 }
