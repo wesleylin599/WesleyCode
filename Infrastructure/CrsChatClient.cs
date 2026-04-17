@@ -13,24 +13,19 @@ public sealed class CrsChatClient : DelegatingChatClient
         CancellationToken cancellationToken = default
     )
     {
-        List<ChatMessage> chatMessages = new List<ChatMessage>();
-        for (int i = 0; i < 10; i++)
+        var chatMessages = new List<ChatMessage>();
+        try
         {
-            try
-            {
-                var response = await this.GetStreamingResponseAsync(messages, options, cancellationToken).ToChatResponseAsync(cancellationToken);
-                chatMessages.AddRange(response.Messages);
-                break;
-            }
-            catch (OperationCanceledException ex)
-            {
-                chatMessages.Add(new ChatMessage(ChatRole.Assistant, ex.Message));
-                break;
-            }
-            catch (Exception ex)
-            {
-                chatMessages.Add(new ChatMessage(ChatRole.Assistant, ex.Message));
-            }
+            var response = await this.GetStreamingResponseAsync(messages, options, cancellationToken).ToChatResponseAsync(cancellationToken);
+            chatMessages.AddRange(response.Messages);
+        }
+        catch (OperationCanceledException ex)
+        {
+            chatMessages.Add(new ChatMessage(ChatRole.Assistant, ex.Message));
+        }
+        catch (Exception ex)
+        {
+            chatMessages.Add(new ChatMessage(ChatRole.Assistant, ex.Message));
         }
         return new ChatResponse(chatMessages);
     }
