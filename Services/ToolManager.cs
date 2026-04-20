@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Text;
+using System.Text.Json;
 using CliWrap;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
@@ -14,15 +15,17 @@ public class ToolManager
     private const int MAX_LOG_LENGTH = 30000;
 
     private static readonly List<TaskItem> _task = new();
+    private static readonly HttpClient _httpClient = new HttpClient();
 
     public static AITool CommandFunction = AIFunctionFactory.Create(Command);
+    public static AITool ReadFileFunction = AIFunctionFactory.Create(ReadFile);
+    public static AITool WebSearchFunction = AIFunctionFactory.Create(WebSearch);
+    public static AITool ReadTasksFunction = AIFunctionFactory.Create(ReadTasks);
     public static AITool EditFileFunction = AIFunctionFactory.Create(EditFile);
     public static AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile);
-    public static AITool ReadFileFunction = AIFunctionFactory.Create(ReadFile);
-    public static AITool ReadTasksFunction = AIFunctionFactory.Create(ReadTasks);
     public static AITool UpdateTasksFunction = AIFunctionFactory.Create(UpdateTasks);
 
-    public static readonly AITool[] ReadFunctions = [CommandFunction, ReadFileFunction, ReadTasksFunction];
+    public static readonly AITool[] ReadFunctions = [CommandFunction, ReadFileFunction, WebSearchFunction, ReadTasksFunction];
     public static readonly AITool[] AllFunctions = [.. ReadFunctions, EditFileFunction, WriteFileFunction, UpdateTasksFunction];
 
     [Description("命令行工具,用于执行命令操作,禁止文件读写,超时一分钟")]
@@ -99,6 +102,62 @@ public class ToolManager
         return ToolResult(callback);
     }
 
+    [Description("请求网络地址获取结果,超时一分钟")]
+    private static async Task<string> WebSearch([Description("请求地址")] string url, CancellationToken cancellationToken = default)
+    {
+        string callback;
+        try
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("$ web search ");
+            Console.ForegroundColor = ConsoleColor.DarkYellow;
+            Console.WriteLine(url);
+            Console.ResetColor();
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromMinutes(1));
+
+            var response = await _httpClient.GetAsync(url, cts.Token);
+            response.EnsureSuccessStatusCode();
+
+            callback = await response.Content.ReadAsStringAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            callback = "Error: 命令执行已取消";
+        }
+        catch (Exception ex)
+        {
+            callback = $"Error: {ex.Message}";
+        }
+        ToolConsoleLog(callback);
+        return ToolResult(callback);
+    }
+
+    [Description("更新任务清单,调用需要传入完整的工作清单,任务状态只有: 未开始, 进行中, 已完成")]
+    private static string UpdateTasks([Description("任务清单列表")] List<TaskItem> tasks)
+    {
+        _task.Clear();
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine("$ chage tasks ");
+        Console.ResetColor();
+        foreach (var item in tasks)
+        {
+            _task.Add(item);
+            Console.WriteLine($"[{item.Status}]{item.Title}");
+        }
+        return "完成更新";
+    }
+
+    [Description("获取任务清单")]
+    private static List<TaskItem> ReadTasks()
+    {
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine($"$ read {_task.Count} tasks ");
+        Console.ResetColor();
+        return _task;
+    }
+
     [Description("写入文件内容,必要时创建目录,超时一分钟")]
     private static async Task<string> WriteFile(
         [Description("文件路径")] string path,
@@ -111,7 +170,7 @@ public class ToolManager
         try
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write("$ write file");
+            Console.Write("$ write file ");
             Console.ForegroundColor = ConsoleColor.DarkYellow;
             Console.WriteLine(path);
             Console.ResetColor();
@@ -189,30 +248,6 @@ public class ToolManager
         return ToolResult(callback);
     }
 
-    [Description("更新任务清单,调用需要传入完整的工作清单,任务状态只有: 未开始, 进行中, 已完成")]
-    private static string UpdateTasks([Description("任务清单列表")] List<TaskItem> tasks)
-    {
-        _task.Clear();
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine("$ chage tasks ");
-        Console.ResetColor();
-        foreach (var item in tasks)
-        {
-            _task.Add(item);
-            Console.WriteLine($"[{item.Status}]{item.Title}");
-        }
-        return "完成更新";
-    }
-
-    [Description("获取任务清单")]
-    private static List<TaskItem> ReadTasks()
-    {
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine($"$ read {_task.Count} tasks ");
-        Console.ResetColor();
-        return _task;
-    }
-
     public static string BuildDiff(string oldText, string newText)
     {
         var sb = new StringBuilder();
@@ -270,7 +305,7 @@ public class ToolManager
         return args.Length > MAX_LOG_LENGTH ? $"{args[..MAX_LOG_LENGTH]} ..." : args;
     }
 
-    private readonly record struct TaskItem(
+    private record TaskItem(
         [Description("任务标题")] string Title,
         [Description("任务状态")] string Status,
         [Description("任务详情")] string Content,
