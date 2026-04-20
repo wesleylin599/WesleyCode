@@ -1,10 +1,10 @@
-﻿using TestConsole5.Extensions;
-using TestConsole5.Hosting;
+﻿using WesleyCode.Extensions;
+using WesleyCode.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.AddConsole();
 builder.Services.AddSingleton<ConsoleLifecycle>();
-builder.Services.AddAgentHost(builder.Configuration, Directory.GetCurrentDirectory());
+builder.AddAgentHost(Directory.GetCurrentDirectory());
 
 using var host = builder.Build();
 using var lifecycle = host.Services.GetRequiredService<ConsoleLifecycle>();

@@ -2,7 +2,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace Microsoft.Extensions.AI;
+namespace WesleyCode.Infrastructure;
 
 [DebuggerStepThrough]
 internal class LoggingAuthPolicy : PipelinePolicy

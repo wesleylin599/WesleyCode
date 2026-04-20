@@ -1,4 +1,4 @@
-﻿namespace TestConsole5.Options;
+﻿namespace WesleyCode.Options;
 
 internal sealed class CacheOptions
 {

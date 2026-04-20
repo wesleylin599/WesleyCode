@@ -1,4 +1,6 @@
-﻿namespace Microsoft.Extensions.AI;
+﻿using Microsoft.Extensions.AI;
+
+namespace WesleyCode.Infrastructure;
 
 public sealed class CrsChatClient : DelegatingChatClient
 {

@@ -7,15 +7,21 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using OpenAI;
-using TestConsole5.Hosting;
-using TestConsole5.Infrastructure;
-using TestConsole5.Options;
-using TestConsole5.Services;
+using WesleyCode.Hosting;
+using WesleyCode.Infrastructure;
+using WesleyCode.Options;
+using WesleyCode.Services;
 
-namespace TestConsole5.Extensions;
+namespace WesleyCode.Extensions;
 
 internal static class ServiceCollectionExtensions
 {
+    public static IHostApplicationBuilder AddAgentHost(this IHostApplicationBuilder builder, string workDirectory)
+    {
+        builder.Services.AddAgentHost(builder.Configuration, workDirectory);
+        return builder;
+    }
+
     public static IServiceCollection AddAgentHost(this IServiceCollection services, IConfiguration configuration, string workDirectory)
     {
         services

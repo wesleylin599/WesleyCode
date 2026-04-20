@@ -7,7 +7,7 @@ using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
 using Microsoft.Extensions.AI;
 
-namespace TestConsole5.Services;
+namespace WesleyCode.Services;
 
 public class ToolManager
 {

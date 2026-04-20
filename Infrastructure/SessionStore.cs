@@ -2,12 +2,11 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TestConsole5.Options;
-using TestConsole5.Services;
+using WesleyCode.Options;
+using WesleyCode.Services;
 
-namespace TestConsole5.Infrastructure;
+namespace WesleyCode.Infrastructure;
 
 internal sealed class SessionStore : ISessionStore
 {

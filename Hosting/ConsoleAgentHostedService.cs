@@ -2,10 +2,10 @@
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using TestConsole5.Options;
-using TestConsole5.Services;
+using WesleyCode.Options;
+using WesleyCode.Services;
 
-namespace TestConsole5.Hosting;
+namespace WesleyCode.Hosting;
 
 internal sealed class ConsoleAgentHostedService : BackgroundService
 {

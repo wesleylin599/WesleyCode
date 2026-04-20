@@ -2,7 +2,7 @@
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
-namespace TestConsole5.Services;
+namespace WesleyCode.Services;
 
 internal interface IAgentRunner
 {

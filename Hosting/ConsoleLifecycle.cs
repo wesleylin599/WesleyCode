@@ -1,4 +1,4 @@
-﻿namespace TestConsole5.Hosting;
+﻿namespace WesleyCode.Hosting;
 
 internal sealed class ConsoleLifecycle : IDisposable
 {

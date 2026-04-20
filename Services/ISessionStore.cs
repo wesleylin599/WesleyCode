@@ -1,6 +1,6 @@
 ﻿using Microsoft.Agents.AI;
 
-namespace TestConsole5.Services;
+namespace WesleyCode.Services;
 
 internal interface ISessionStore
 {
