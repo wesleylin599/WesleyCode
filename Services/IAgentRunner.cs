@@ -1,6 +1,5 @@
 ﻿using System.Text.Json;
 using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
 
 namespace WesleyCode.Services;
 

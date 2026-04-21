@@ -27,18 +27,17 @@ internal class SubAgentProvider : AIContextProvider
         """
         你是一个规划代理.设计实现任务清单.不要做更改.
         要求:
-        将任务添加到任务队列中.
-        每个任务需要可独立执行.
-        任务总数不要超过 10 条.
-        完成后更新任务清单.
+        每个任务需要按顺序且可独立执行.
+        任务的总数不要超过 10 条.
+        完成后更新完整任务清单.
         只输出`已更新任务清单`.
         """,
         [.. ToolManager.ReadFunctions, ToolManager.UpdateTasksFunction],
-        new ReasoningOptions { Effort = ReasoningEffort.High, Output = ReasoningOutput.Summary }
+        new ReasoningOptions { Output = ReasoningOutput.Summary }
     );
     private static readonly AgentContent executor = new AgentContent(
         "executor",
-        "执行代理,用于执行任务,每次只执行一条任务,使用示例`use_subAgent(executor,<任务标题>)`",
+        "执行代理,用于执行任务,每次按序号只执行一条任务,使用示例`use_subAgent(executor,<任务标题>)`",
         """
         你是一个执行代理.高效简洁地完成任务.
         要求:
@@ -47,7 +46,7 @@ internal class SubAgentProvider : AIContextProvider
         只输出`已更新任务清单`.
         """,
         ToolManager.AllFunctions,
-        new ReasoningOptions { Effort = ReasoningEffort.Low, Output = ReasoningOutput.Summary }
+        new ReasoningOptions { Output = ReasoningOutput.Summary }
     );
     private static readonly AgentContent reviewer = new AgentContent(
         "reviewer",
@@ -59,7 +58,7 @@ internal class SubAgentProvider : AIContextProvider
         输出评估结论.
         """,
         ToolManager.ReadFunctions,
-        new ReasoningOptions { Effort = ReasoningEffort.Low, Output = ReasoningOutput.Full }
+        new ReasoningOptions { Output = ReasoningOutput.Full }
     );
 
     private readonly Dictionary<string, AgentContent> _agents = new(StringComparer.OrdinalIgnoreCase)

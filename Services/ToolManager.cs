@@ -1,6 +1,5 @@
 ﻿using System.ComponentModel;
 using System.Text;
-using System.Text.Json;
 using CliWrap;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
@@ -28,8 +27,8 @@ public class ToolManager
     public static readonly AITool[] ReadFunctions = [CommandFunction, ReadFileFunction, WebSearchFunction, ReadTasksFunction];
     public static readonly AITool[] AllFunctions = [.. ReadFunctions, EditFileFunction, WriteFileFunction, UpdateTasksFunction];
 
-    [Description("命令行工具,用于执行命令操作,禁止文件读写,超时一分钟")]
-    private static async Task<string> Command([Description("命令")] string command, CancellationToken cancellationToken = default)
+    [Description("命令行工具,用于执行命令操作,禁止文件读写")]
+    private static async Task<string> Command([Description("命令")] CommandItem command, CancellationToken cancellationToken = default)
     {
         string callback;
         try
@@ -37,20 +36,19 @@ public class ToolManager
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.Write("$ ran ");
             Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.WriteLine(command);
+            Console.WriteLine($"{command.FileName} {string.Join(" ", command.Arguments)}");
             Console.ResetColor();
 
             var stdout = new StringBuilder();
             var stderr = new StringBuilder();
-            var cli = OperatingSystem.IsWindows() ? Cli.Wrap("powershell").WithArguments(command) : Cli.Wrap("/bin/bash").WithArguments(command);
-            cli = cli.WithWorkingDirectory(Directory.GetCurrentDirectory())
+            var cli = Cli.Wrap(command.FileName)
+                .WithArguments(command.Arguments)
+                .WithWorkingDirectory(Directory.GetCurrentDirectory())
                 .WithValidation(CommandResultValidation.None)
                 .WithStandardOutputPipe(PipeTarget.ToStringBuilder(stdout))
                 .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr));
 
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromMinutes(1));
-            var result = await cli.ExecuteAsync(cts.Token);
+            var result = await cli.ExecuteAsync(cancellationToken);
 
             callback = $"[{result.ExitCode}]{stdout}{stderr}";
         }
@@ -66,7 +64,7 @@ public class ToolManager
         return ToolResult(callback);
     }
 
-    [Description("读取文件内容并返回实际字符编码,超时一分钟")]
+    [Description("读取文件内容并返回实际字符编码")]
     private static async Task<string> ReadFile([Description("文件路径")] string path, CancellationToken cancellationToken = default)
     {
         string callback;
@@ -78,12 +76,9 @@ public class ToolManager
             Console.WriteLine(path);
             Console.ResetColor();
 
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromMinutes(1));
-
             using var reader = new StreamReader(path, true);
             var encoding = reader.CurrentEncoding.WebName;
-            var content = await reader.ReadToEndAsync(cts.Token);
+            var content = await reader.ReadToEndAsync(cancellationToken);
             callback = $"""
                 encoding: {encoding}
                 {content}
@@ -102,7 +97,7 @@ public class ToolManager
         return ToolResult(callback);
     }
 
-    [Description("请求网络地址获取结果,超时一分钟")]
+    [Description("请求网络地址获取结果")]
     private static async Task<string> WebSearch([Description("请求地址")] string url, CancellationToken cancellationToken = default)
     {
         string callback;
@@ -114,13 +109,10 @@ public class ToolManager
             Console.WriteLine(url);
             Console.ResetColor();
 
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromMinutes(1));
-
-            var response = await _httpClient.GetAsync(url, cts.Token);
+            var response = await _httpClient.GetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            callback = await response.Content.ReadAsStringAsync(cts.Token);
+            callback = await response.Content.ReadAsStringAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -144,7 +136,7 @@ public class ToolManager
         foreach (var item in tasks)
         {
             _task.Add(item);
-            Console.WriteLine($"[{item.Status}]{item.Title}");
+            Console.WriteLine($"[{item.Status}]{item.Num} {item.Title}");
         }
         return "完成更新";
     }
@@ -158,7 +150,7 @@ public class ToolManager
         return _task;
     }
 
-    [Description("写入文件内容,必要时创建目录,超时一分钟")]
+    [Description("写入文件内容,必要时创建目录")]
     private static async Task<string> WriteFile(
         [Description("文件路径")] string path,
         [Description("文本内容")] string content,
@@ -179,9 +171,7 @@ public class ToolManager
             if (!string.IsNullOrWhiteSpace(dir))
                 Directory.CreateDirectory(dir);
 
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromMinutes(1));
-            await File.WriteAllTextAsync(path, content, Encoding.GetEncoding(encoding), cts.Token);
+            await File.WriteAllTextAsync(path, content, Encoding.GetEncoding(encoding), cancellationToken);
             callback = $"""
                 encoding: {encoding}
                 {content}
@@ -199,7 +189,7 @@ public class ToolManager
         return ToolResult(callback);
     }
 
-    [Description("替换文件中的文本内容,超时一分钟")]
+    [Description("替换文件中的文本内容")]
     private static async Task<string> EditFile(
         [Description("文件路径")] string path,
         [Description("旧文本内容")] string oldText,
@@ -217,10 +207,7 @@ public class ToolManager
             Console.WriteLine($"{path}");
             Console.ResetColor();
 
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromMinutes(1));
-
-            var content = File.Exists(path) ? await File.ReadAllTextAsync(path, Encoding.GetEncoding(encoding), cts.Token) : string.Empty;
+            var content = File.Exists(path) ? await File.ReadAllTextAsync(path, Encoding.GetEncoding(encoding), cancellationToken) : string.Empty;
 
             if (string.IsNullOrEmpty(oldText))
                 callback = "Error: 旧文本内容为空";
@@ -228,7 +215,7 @@ public class ToolManager
                 callback = "Error: 文件内容不包含旧文本内容";
             else
             {
-                await File.WriteAllTextAsync(path, content.Replace(oldText, newText), Encoding.GetEncoding(encoding), cts.Token);
+                await File.WriteAllTextAsync(path, content.Replace(oldText, newText), Encoding.GetEncoding(encoding), cancellationToken);
                 callback = $"""
                     encoding: {encoding}
                     {BuildDiff(oldText, newText)}
@@ -305,7 +292,10 @@ public class ToolManager
         return args.Length > MAX_LOG_LENGTH ? $"{args[..MAX_LOG_LENGTH]} ..." : args;
     }
 
+    private record CommandItem([Description("工具名称")] string FileName, [Description("工具参数集合")] List<string> Arguments);
+
     private record TaskItem(
+        [Description("任务序号")] string Num,
         [Description("任务标题")] string Title,
         [Description("任务状态")] string Status,
         [Description("任务详情")] string Content,

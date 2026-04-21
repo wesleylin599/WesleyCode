@@ -157,6 +157,14 @@ internal static class ServiceCollectionExtensions
             return new SystemPromptProvider(workDirectory, loggerFactory);
         });
 
+        services.AddSingleton<ChatHistoryProvider>(provider =>
+        {
+            var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
+            return new InMemoryChatHistoryProvider(
+                new InMemoryChatHistoryProviderOptions { ChatReducer = new MessageCountingChatReducer(compactionOptions.MessageCountingLimit) }
+            );
+        });
+
         services.AddSingleton<SubAgentProvider>(provider =>
         {
             var crsClient = provider.GetRequiredService<CrsChatClient>();
@@ -165,14 +173,6 @@ internal static class ServiceCollectionExtensions
             var promptProvider = provider.GetRequiredService<SystemPromptProvider>();
             var skillsProvider = provider.GetRequiredService<AgentSkillsProvider>();
             return new SubAgentProvider(crsClient, [compactionProvider, promptProvider, skillsProvider], loggerFactory);
-        });
-
-        services.AddSingleton<ChatHistoryProvider>(provider =>
-        {
-            var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
-            return new InMemoryChatHistoryProvider(
-                new InMemoryChatHistoryProviderOptions { ChatReducer = new MessageCountingChatReducer(compactionOptions.MessageCountingLimit) }
-            );
         });
 
         services.AddSingleton<AIAgent>(provider =>
@@ -190,7 +190,7 @@ internal static class ServiceCollectionExtensions
                     Name = options.Name,
                     ChatOptions = new ChatOptions
                     {
-                        Reasoning = new ReasoningOptions { Effort = ReasoningEffort.Low, Output = ReasoningOutput.Full },
+                        Reasoning = new ReasoningOptions { Output = ReasoningOutput.Full },
                         Instructions = options.Instructions,
                         Tools = ToolManager.AllFunctions,
                         ToolMode = ChatToolMode.Auto,

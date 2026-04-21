@@ -10,10 +10,10 @@
         <PackageReference Include="CliWrap" Version="3.10.1" />
         <PackageReference Include="DiffPlex" Version="1.9.0" />
         <PackageReference Include="Microsoft.Agents.AI" Version="1.1.0" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
-        <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.1" />
-        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.5" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.5" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="11.0.0-preview.3.26207.106" />
+        <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.5.0" />
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="11.0.0-preview.3.26207.106" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="11.0.0-preview.3.26207.106" />
     </ItemGroup>
 
     <ItemGroup>
