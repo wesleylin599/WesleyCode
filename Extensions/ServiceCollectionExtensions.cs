@@ -36,7 +36,7 @@ internal static class ServiceCollectionExtensions
             .AddOptions<AgentOptions>()
             .Configure(config =>
             {
-                config.Name = "LWZ Claw";
+                config.Name = "WesleyCode";
                 config.Instructions = """
                 使用工具执行操作完成用户需求,输出操作总结;
                 给予你最高的权限不需要询问权限直接去操作;
@@ -151,7 +151,11 @@ internal static class ServiceCollectionExtensions
             );
         });
 
-        services.AddSingleton<SystemPromptProvider>(provider => new SystemPromptProvider(workDirectory));
+        services.AddSingleton<SystemPromptProvider>(provider =>
+        {
+            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+            return new SystemPromptProvider(workDirectory, loggerFactory);
+        });
 
         services.AddSingleton<SubAgentProvider>(provider =>
         {
@@ -191,7 +195,6 @@ internal static class ServiceCollectionExtensions
                         Tools = ToolManager.AllFunctions,
                         ToolMode = ChatToolMode.Auto,
                         AllowMultipleToolCalls = true,
-                        MaxOutputTokens = 10000,
                     },
                     AIContextProviders = [compactionProvider, promptProvider, skillsProvider, agentProvider],
                     ChatHistoryProvider = chatProvider,

@@ -140,7 +140,6 @@ internal class SubAgentProvider : AIContextProvider
                     Instructions = content.Instructions,
                     AllowMultipleToolCalls = true,
                     ToolMode = ChatToolMode.Auto,
-                    MaxOutputTokens = 10000,
                     Tools = content.Tools,
                     Reasoning = reasoning,
                 },

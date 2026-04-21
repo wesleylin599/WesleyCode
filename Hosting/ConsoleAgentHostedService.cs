@@ -77,7 +77,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 await Task.Delay(100, stoppingToken);
                 Console.Write("> User : ");
                 var input = Console.ReadLine();
-                if (string.IsNullOrEmpty(input))
+                if (string.IsNullOrWhiteSpace(input))
                     continue;
                 if (string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
                 {
