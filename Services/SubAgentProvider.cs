@@ -37,7 +37,7 @@ internal class SubAgentProvider : AIContextProvider
     );
     private static readonly AgentContent executor = new AgentContent(
         "executor",
-        "执行代理,用于执行任务,每次按序号只执行一条任务,使用示例`use_subAgent(executor,<任务标题>)`",
+        "执行代理,用于执行任务,按序号执行一条任务,使用示例`use_subAgent(executor,<任务标题>)`",
         """
         你是一个执行代理.高效简洁地完成任务.
         要求:
@@ -147,8 +147,9 @@ internal class SubAgentProvider : AIContextProvider
         );
         var session = await subAgent.CreateSessionAsync(cancellationToken);
 
-        var response = await subAgent.RunAsync(input, session, cancellationToken: cancellationToken);
-
+        var response = new AgentResponse(new ChatMessage(ChatRole.User, input));
+        do response = await subAgent.RunAsync(response.Messages, session, cancellationToken: cancellationToken);
+        while (string.IsNullOrEmpty(response.Text));
         _logger.LogInformation(
             $"""
             {content.Name} response: 

@@ -24,8 +24,8 @@ internal sealed class AgentRunner : IAgentRunner
     public async Task<AgentResponse> RunAsync(string input, AgentSession session, CancellationToken cancellationToken)
     {
         var response = new AgentResponse(new ChatMessage(ChatRole.User, input));
-        while (response.RawRepresentation == null)
-            response = await _agent.RunAsync(response.Messages.ToList(), session, cancellationToken: cancellationToken);
+        do response = await _agent.RunAsync(response.Messages, session, cancellationToken: cancellationToken);
+        while (string.IsNullOrEmpty(response.Text));
         return response;
     }
 }

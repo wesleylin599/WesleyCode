@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Text;
 using CliWrap;
+using CliWrap.Buffered;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
@@ -39,22 +40,14 @@ public class ToolManager
             Console.WriteLine($"{command.FileName} {string.Join(" ", command.Arguments)}");
             Console.ResetColor();
 
-            var stdout = new StringBuilder();
-            var stderr = new StringBuilder();
             var cli = Cli.Wrap(command.FileName)
                 .WithArguments(command.Arguments)
-                .WithWorkingDirectory(Directory.GetCurrentDirectory())
-                .WithValidation(CommandResultValidation.None)
-                .WithStandardOutputPipe(PipeTarget.ToStringBuilder(stdout))
-                .WithStandardErrorPipe(PipeTarget.ToStringBuilder(stderr));
+                .WithWorkingDirectory(command.WorkingDirectory)
+                .WithValidation(CommandResultValidation.None);
 
-            var result = await cli.ExecuteAsync(cancellationToken);
+            var result = await cli.ExecuteBufferedAsync(cancellationToken);
 
-            callback = $"[{result.ExitCode}]{stdout}{stderr}";
-        }
-        catch (OperationCanceledException)
-        {
-            callback = "Error: 命令执行已取消";
+            callback = $"[{result.ExitCode}]{result.StandardOutput}{result.StandardError}";
         }
         catch (Exception ex)
         {
@@ -84,10 +77,6 @@ public class ToolManager
                 {content}
                 """;
         }
-        catch (OperationCanceledException)
-        {
-            callback = "Error: 读取文件已取消";
-        }
         catch (Exception ex)
         {
             callback = $"Error: {ex.Message}";
@@ -113,10 +102,6 @@ public class ToolManager
             response.EnsureSuccessStatusCode();
 
             callback = await response.Content.ReadAsStringAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            callback = "Error: 命令执行已取消";
         }
         catch (Exception ex)
         {
@@ -177,10 +162,6 @@ public class ToolManager
                 {content}
                 """;
         }
-        catch (OperationCanceledException)
-        {
-            callback = "Error: 写入文件已取消";
-        }
         catch (Exception ex)
         {
             callback = $"Error: {ex.Message}";
@@ -221,10 +202,6 @@ public class ToolManager
                     {BuildDiff(oldText, newText)}
                     """;
             }
-        }
-        catch (OperationCanceledException)
-        {
-            callback = "Error: 修改文件已取消";
         }
         catch (Exception ex)
         {
@@ -292,7 +269,11 @@ public class ToolManager
         return args.Length > MAX_LOG_LENGTH ? $"{args[..MAX_LOG_LENGTH]} ..." : args;
     }
 
-    private record CommandItem([Description("工具名称")] string FileName, [Description("工具参数集合")] List<string> Arguments);
+    private record CommandItem(
+        [Description("工具名称")] string FileName,
+        [Description("工具工作目录")] string WorkingDirectory,
+        [Description("工具参数集合")] List<string> Arguments
+    );
 
     private record TaskItem(
         [Description("任务序号")] string Num,
