@@ -37,7 +37,7 @@ internal class SubAgentProvider : AIContextProvider
     );
     private static readonly AgentContent executor = new AgentContent(
         "executor",
-        "执行代理,用于执行任务,按序号执行一条任务,使用示例`use_subAgent(executor,<任务标题>)`",
+        "执行代理,用于执行任务清单中的任务,按清单中任务序号逐条执行,使用示例`use_subAgent(executor,<任务序号.任务标题>)`",
         """
         你是一个执行代理.高效简洁地完成任务.
         要求:

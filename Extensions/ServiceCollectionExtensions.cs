@@ -55,7 +55,6 @@ internal static class ServiceCollectionExtensions
             .AddOptions<CompactionOptions>()
             .Configure(config =>
             {
-                config.MessageCountingLimit = 10;
                 config.ToolResultTokenLimit = 1500;
                 config.SummaryTokenLimit = 10000;
                 config.SlidingWindowTurnLimit = 10;
@@ -157,14 +156,6 @@ internal static class ServiceCollectionExtensions
             return new SystemPromptProvider(workDirectory, loggerFactory);
         });
 
-        services.AddSingleton<ChatHistoryProvider>(provider =>
-        {
-            var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
-            return new InMemoryChatHistoryProvider(
-                new InMemoryChatHistoryProviderOptions { ChatReducer = new MessageCountingChatReducer(compactionOptions.MessageCountingLimit) }
-            );
-        });
-
         services.AddSingleton<SubAgentProvider>(provider =>
         {
             var crsClient = provider.GetRequiredService<CrsChatClient>();
@@ -182,7 +173,6 @@ internal static class ServiceCollectionExtensions
             var promptProvider = provider.GetRequiredService<SystemPromptProvider>();
             var skillsProvider = provider.GetRequiredService<AgentSkillsProvider>();
             var agentProvider = provider.GetRequiredService<SubAgentProvider>();
-            var chatProvider = provider.GetRequiredService<ChatHistoryProvider>();
             var chatClient = provider.GetRequiredService<IChatClient>();
             return chatClient.AsAIAgent(
                 options: new ChatClientAgentOptions
@@ -197,7 +187,6 @@ internal static class ServiceCollectionExtensions
                         AllowMultipleToolCalls = true,
                     },
                     AIContextProviders = [compactionProvider, promptProvider, skillsProvider, agentProvider],
-                    ChatHistoryProvider = chatProvider,
                 }
             );
         });
