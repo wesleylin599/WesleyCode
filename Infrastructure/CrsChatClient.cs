@@ -35,10 +35,10 @@ public sealed class CrsChatClient : DelegatingChatClient
     )
     {
         options ??= new ChatOptions();
-        List<ChatMessage> request = [new ChatMessage(ChatRole.User, $"<instructions>{options.Instructions}</instructions>")];
+        List<ChatMessage> request = [new ChatMessage(ChatRole.User, options.Instructions)];
         foreach (var message in messages)
             if (message.Role == ChatRole.System)
-                request.Add(new ChatMessage(ChatRole.User, $"<system>{message.Text}</system>"));
+                request.Add(new ChatMessage(ChatRole.User, message.Text));
             else
                 request.Add(message);
         return base.GetStreamingResponseAsync(request, options, cancellationToken);

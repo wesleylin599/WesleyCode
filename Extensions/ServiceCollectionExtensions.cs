@@ -31,10 +31,6 @@ internal static class ServiceCollectionExtensions
                 config.ModelId = configuration.GetValue<string>("WINTEAM_MODELID") ?? "gpt-5.2";
                 config.BaseUrl = configuration.GetValue<string>("WINTEAM_BASEURL") ?? string.Empty;
                 config.ApiKey = configuration.GetValue<string>("WINTEAM_APIKEY") ?? string.Empty;
-
-                //config.ModelId = "gpt-oss:20b";
-                //config.BaseUrl = "http://192.168.2.180:21434/v1";
-                //config.ApiKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJgMtR3MZk530psl6XaWUhJ1eo+9A4GA77QoyCJ4ChWU";
             });
         services
             .AddOptions<AgentOptions>()
