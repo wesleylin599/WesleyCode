@@ -4,11 +4,6 @@ namespace WesleyCode.Infrastructure;
 
 public sealed class CrsChatClient : DelegatingChatClient
 {
-    /// <summary>
-    ///
-    /// </summary>
-    /// <param name="innerClient"></param>
-    /// <returns></returns>
     public static CrsChatClient Create(IChatClient innerClient) => new CrsChatClient(innerClient);
 
     public CrsChatClient(IChatClient innerClient)
