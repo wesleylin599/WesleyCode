@@ -4,48 +4,101 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace WesleyCode.Services;
 
-internal class SystemPromptProvider : AIContextProvider
+internal sealed class SystemPromptProvider : AIContextProvider
 {
-    private const string _promptName = "SYSTEM.md";
-    private static string AgentPrompt = string.Empty;
+    private const string SystemPromptName = "SYSTEM.md";
+    private const string AgentPromptName = "AGENTS.md";
 
     private readonly string _workDirectory;
     private readonly ILogger<SystemPromptProvider> _logger;
+    private readonly SemaphoreSlim _promptLock = new(1, 1);
+    private string? _agentPrompt;
 
     public SystemPromptProvider(string workDirectory, ILoggerFactory? loggerFactory = null)
     {
         _workDirectory = workDirectory;
-        this._logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<SystemPromptProvider>();
+        _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<SystemPromptProvider>();
     }
 
     protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrEmpty(AgentPrompt))
+        if (!string.IsNullOrWhiteSpace(_agentPrompt))
         {
-            AgentPrompt = await BuildPromptAsync(cancellationToken);
+            return new AIContext { Instructions = _agentPrompt };
         }
-        return new AIContext { Instructions = AgentPrompt };
+
+        await _promptLock.WaitAsync(cancellationToken);
+        try
+        {
+            _agentPrompt ??= await BuildPromptAsync(cancellationToken);
+        }
+        finally
+        {
+            _promptLock.Release();
+        }
+
+        return new AIContext { Instructions = _agentPrompt };
     }
 
     private async Task<string> BuildPromptAsync(CancellationToken cancellationToken = default)
     {
-        var local = Path.Combine(_workDirectory, _promptName);
-        var main = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _promptName);
         var builder = new StringBuilder();
         builder.AppendLine($"你是位于 {_workDirectory} 的代理工具,使用中文输出;");
-        builder.AppendLine("操作时要求简洁高效,最小改动实现需求");
-        if (File.Exists(local))
+        builder.AppendLine("操作时要求简洁高效,最小改动实现需求;");
+
+        foreach (var path in EnumeratePromptFiles())
         {
-            _logger.LogInformation($"加载`{local}`");
-            var prompt = await File.ReadAllTextAsync(local, cancellationToken);
+            _logger.LogInformation("加载`{PromptPath}`", path);
+            var prompt = await File.ReadAllTextAsync(path, cancellationToken);
+            if (string.IsNullOrWhiteSpace(prompt))
+            {
+                continue;
+            }
+
+            builder.AppendLine($"以下附加指令来自 {path}:");
             builder.AppendLine(prompt);
         }
-        if (File.Exists(main))
+
+        return builder.ToString().Trim();
+    }
+
+    private IEnumerable<string> EnumeratePromptFiles()
+    {
+        foreach (var directory in EnumerateDirectoriesFromRoot(_workDirectory))
         {
-            _logger.LogInformation($"加载`{main}`");
-            var prompt = await File.ReadAllTextAsync(main, cancellationToken);
-            builder.AppendLine(prompt);
+            var agentsPath = Path.Combine(directory, AgentPromptName);
+            if (File.Exists(agentsPath))
+            {
+                yield return agentsPath;
+            }
         }
-        return builder.ToString();
+
+        var localSystemPath = Path.Combine(_workDirectory, SystemPromptName);
+        if (File.Exists(localSystemPath))
+        {
+            yield return localSystemPath;
+        }
+
+        var baseSystemPath = Path.Combine(AppContext.BaseDirectory, SystemPromptName);
+        if (File.Exists(baseSystemPath) && !string.Equals(baseSystemPath, localSystemPath, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return baseSystemPath;
+        }
+    }
+
+    private static IEnumerable<string> EnumerateDirectoriesFromRoot(string workDirectory)
+    {
+        var directories = new Stack<string>();
+        DirectoryInfo? current = new(workDirectory);
+        while (current != null)
+        {
+            directories.Push(current.FullName);
+            current = current.Parent;
+        }
+
+        while (directories.Count > 0)
+        {
+            yield return directories.Pop();
+        }
     }
 }

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace WesleyCode.Services;
 
-internal class SubAgentProvider : AIContextProvider
+internal sealed class SubAgentProvider : AIContextProvider
 {
     private const string DefaultInstructionPrompt = """
         你拥有以下的智能体,在需要的时候使用智能体去完成任务:
@@ -21,7 +21,7 @@ internal class SubAgentProvider : AIContextProvider
         子代理拥有独立的上下文.
         """;
 
-    private static readonly AgentContent planner = new AgentContent(
+    private static readonly AgentContent Planner = new(
         "planner",
         "规划代理,用于设计实现任务清单,使用示例`use_subAgent(planner,<需求>)`",
         """
@@ -35,7 +35,7 @@ internal class SubAgentProvider : AIContextProvider
         [.. ToolManager.ReadFunctions, ToolManager.UpdateTasksFunction],
         new ReasoningOptions { Output = ReasoningOutput.Summary }
     );
-    private static readonly AgentContent executor = new AgentContent(
+    private static readonly AgentContent Executor = new(
         "executor",
         "执行代理,用于执行任务清单中的任务,按清单中任务序号逐条执行,使用示例`use_subAgent(executor,<任务序号.任务标题>)`",
         """
@@ -48,7 +48,7 @@ internal class SubAgentProvider : AIContextProvider
         ToolManager.AllFunctions,
         new ReasoningOptions { Output = ReasoningOutput.Summary }
     );
-    private static readonly AgentContent reviewer = new AgentContent(
+    private static readonly AgentContent Reviewer = new(
         "reviewer",
         "审阅代理,用于对任务完成度进行评估,使用示例`use_subAgent(reviewer,<根据任务清单进行评估>)`",
         """
@@ -61,17 +61,16 @@ internal class SubAgentProvider : AIContextProvider
         new ReasoningOptions { Output = ReasoningOutput.Full }
     );
 
-    private static string AgentPrompt = string.Empty;
-
     private readonly AITool[] _tools;
     private readonly IChatClient _client;
     private readonly AIContextProvider[] _providers;
     private readonly ILogger<SubAgentProvider> _logger;
+    private readonly string _agentPrompt;
     private readonly Dictionary<string, AgentContent> _agents = new(StringComparer.OrdinalIgnoreCase)
     {
-        [planner.Name] = planner,
-        [executor.Name] = executor,
-        [reviewer.Name] = reviewer,
+        [Planner.Name] = Planner,
+        [Executor.Name] = Executor,
+        [Reviewer.Name] = Reviewer,
     };
 
     public SubAgentProvider(IChatClient client, AIContextProvider[]? providers = null, ILoggerFactory? loggerFactory = null)
@@ -80,17 +79,14 @@ internal class SubAgentProvider : AIContextProvider
         _providers = providers ?? [];
         _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<SubAgentProvider>();
         _tools = [AIFunctionFactory.Create(this.UseSubAgentAsync, name: "use_subAgent", description: "调用子代理,获取子代理执行结果.")];
+        _agentPrompt = BuildAgentPrompt();
     }
 
-    protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
+    protected override ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrEmpty(AgentPrompt))
-        {
-            AgentPrompt = BuildAgentPrompt();
-        }
-        _logger.LogInformation($"Successfully loaded {_agents.Count} subAgent");
-        var instructionPrompt = string.Format(DefaultInstructionPrompt, AgentPrompt);
-        return new AIContext { Instructions = instructionPrompt, Tools = this._tools };
+        _logger.LogInformation("Successfully loaded {AgentCount} subAgent", _agents.Count);
+        var instructionPrompt = string.Format(DefaultInstructionPrompt, _agentPrompt);
+        return ValueTask.FromResult(new AIContext { Instructions = instructionPrompt, Tools = _tools });
     }
 
     private record AgentContent(string Name, string Description, string Instructions, AITool[] Tools, ReasoningOptions? Reasoning = null);
@@ -102,11 +98,13 @@ internal class SubAgentProvider : AIContextProvider
     )
     {
         if (!_agents.TryGetValue(name, out var content))
+        {
             return "Error: 未找到该子代理.";
+        }
 
         _logger.LogInformation(
             $"""
-            {content.Name} request: 
+            {content.Name} request:
             {input}
             """
         );
@@ -132,16 +130,23 @@ internal class SubAgentProvider : AIContextProvider
         var session = await subAgent.CreateSessionAsync(cancellationToken);
 
         var response = new AgentResponse(new ChatMessage(ChatRole.User, input));
-        do response = await subAgent.RunAsync(response.Messages, session, cancellationToken: cancellationToken);
-        while (string.IsNullOrEmpty(response.Text));
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            response = await subAgent.RunAsync(response.Messages, session, cancellationToken: cancellationToken);
+            if (!string.IsNullOrWhiteSpace(response.Text))
+            {
+                break;
+            }
+        }
+
         _logger.LogInformation(
             $"""
-            {content.Name} response: 
-            {response}
+            {content.Name} response:
+            {response.Text}
             """
         );
 
-        return string.IsNullOrEmpty(response.Text) ? "Error:未获取到输出结果" : response.Text;
+        return string.IsNullOrWhiteSpace(response.Text) ? "Error:未获取到输出结果" : response.Text;
     }
 
     private string BuildAgentPrompt()
@@ -152,20 +157,17 @@ internal class SubAgentProvider : AIContextProvider
             sb.AppendLine("  <agent>");
             sb.AppendLine($"    <name>{SecurityElement.Escape(agentContent.Name)}</name>");
             sb.AppendLine($"    <description>{SecurityElement.Escape(agentContent.Description)}</description>");
-            sb.AppendLine($"    <tools>");
-            if (agentContent.Tools is not null)
+            sb.AppendLine("    <tools>");
+            foreach (var tool in agentContent.Tools)
             {
-                foreach (var tool in agentContent.Tools)
-                {
-                    sb.AppendLine($"        <tool>");
-                    sb.AppendLine($"            <name>{SecurityElement.Escape(tool.Name)}</name>");
-                    sb.AppendLine($"            <description>{SecurityElement.Escape(tool.Description)}</description>");
-                    sb.AppendLine($"        </tool>");
-                }
+                sb.AppendLine("        <tool>");
+                sb.AppendLine($"            <name>{SecurityElement.Escape(tool.Name)}</name>");
+                sb.AppendLine($"            <description>{SecurityElement.Escape(tool.Description)}</description>");
+                sb.AppendLine("        </tool>");
             }
-            sb.AppendLine($"    </tools>");
+            sb.AppendLine("    </tools>");
             sb.AppendLine("  </agent>");
-            _logger.LogInformation($"Loaded subAgent: {agentContent.Name}");
+            _logger.LogInformation("Loaded subAgent: {SubAgentName}", agentContent.Name);
         }
         return sb.ToString().TrimEnd();
     }

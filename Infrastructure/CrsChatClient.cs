@@ -21,10 +21,6 @@ public sealed class CrsChatClient : DelegatingChatClient
             var response = await this.GetStreamingResponseAsync(messages, options, cancellationToken).ToChatResponseAsync(cancellationToken);
             chatMessages.AddRange(response.Messages);
         }
-        catch (OperationCanceledException ex)
-        {
-            chatMessages.Add(new ChatMessage(ChatRole.Assistant, ex.Message));
-        }
         catch (Exception ex)
         {
             chatMessages.Add(new ChatMessage(ChatRole.Assistant, ex.Message));

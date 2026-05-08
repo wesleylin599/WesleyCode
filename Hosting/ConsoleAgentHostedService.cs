@@ -48,6 +48,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             _lastSavedAt = DateTimeOffset.UtcNow;
             _sessionDirty = false;
             await PrintHistoryAsync(_session, stoppingToken);
+            PrintHelp();
             await RunLoopAsync(stoppingToken);
         }
         catch (OperationCanceledException) { }
@@ -64,7 +65,9 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         if (_session != null)
+        {
             await SafeSaveAsync(_session, cancellationToken, force: true);
+        }
         await base.StopAsync(cancellationToken);
     }
 
@@ -78,34 +81,30 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 Console.Write("> User : ");
                 var input = Console.ReadLine();
                 if (string.IsNullOrWhiteSpace(input))
-                    continue;
-                if (string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.Clear();
-                    await _sessionStore.ClearAsync(stoppingToken);
-                    _session = await _agentRunner.CreateSessionAsync(stoppingToken);
-                    MarkSessionDirty();
                     continue;
                 }
-                if (string.Equals(input, "/exit", StringComparison.OrdinalIgnoreCase))
-                    break;
 
-                using (var source = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken))
+                if (string.Equals(input, "/exit", StringComparison.OrdinalIgnoreCase))
                 {
-                    var task = CancelAgentAsync(source);
-                    var stopwatch = Stopwatch.StartNew();
-                    var response = await _agentRunner.RunAsync(input, _session!, source.Token);
-                    stopwatch.Stop();
-                    Console.WriteLine($"> Agent: {response}");
-                    _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
-                    MarkSessionDirty();
-                    source.Cancel();
-                    await task;
+                    break;
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                break;
+
+                if (await TryHandleCommandAsync(input, stoppingToken))
+                {
+                    continue;
+                }
+
+                using var source = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                var task = CancelAgentAsync(source);
+                var stopwatch = Stopwatch.StartNew();
+                var response = await _agentRunner.RunAsync(input, _session!, source.Token);
+                stopwatch.Stop();
+                Console.WriteLine($"> Agent: {response.Text}");
+                _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
+                MarkSessionDirty();
+                source.Cancel();
+                await task;
             }
             catch (Exception ex)
             {
@@ -114,7 +113,9 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             finally
             {
                 if (_session != null)
+                {
                     await SafeSaveAsync(_session, stoppingToken, force: false);
+                }
                 Console.ResetColor();
             }
         }
@@ -126,20 +127,90 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         {
             foreach (var message in history)
             {
-                if (string.IsNullOrEmpty(message.Text))
+                if (string.IsNullOrWhiteSpace(message.Text) || message.Role == ChatRole.Tool)
+                {
                     continue;
-                if (message.Role == ChatRole.Tool)
-                    continue;
-                string target = string.Empty;
+                }
+
+                string? target = null;
                 if (message.Role == ChatRole.User)
-                    target = $"> User : {message}";
+                {
+                    target = $"> User : {message.Text}";
+                }
                 else if (message.Role == ChatRole.Assistant)
-                    target = $"> Agent: {message}";
+                {
+                    target = $"> Agent: {message.Text}";
+                }
+
+                if (string.IsNullOrEmpty(target))
+                {
+                    continue;
+                }
+
                 cancellationToken.ThrowIfCancellationRequested();
                 Console.WriteLine(target);
             }
         }
+
         await Task.CompletedTask;
+    }
+
+    private async Task<bool> TryHandleCommandAsync(string input, CancellationToken cancellationToken)
+    {
+        if (string.Equals(input, "/help", StringComparison.OrdinalIgnoreCase))
+        {
+            PrintHelp();
+            return true;
+        }
+
+        if (string.Equals(input, "/cls", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Clear();
+            return true;
+        }
+
+        if (string.Equals(input, "/history", StringComparison.OrdinalIgnoreCase))
+        {
+            if (_session != null)
+            {
+                await PrintHistoryAsync(_session, cancellationToken);
+            }
+
+            return true;
+        }
+
+        if (string.Equals(input, "/save", StringComparison.OrdinalIgnoreCase))
+        {
+            if (_session != null)
+            {
+                await SafeSaveAsync(_session, cancellationToken, force: true);
+                Console.WriteLine("> System: 会话已保存。");
+            }
+
+            return true;
+        }
+
+        if (string.Equals(input, "/reset", StringComparison.OrdinalIgnoreCase) || string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Clear();
+            }
+
+            await _sessionStore.ClearAsync(cancellationToken);
+            _session = await _agentRunner.CreateSessionAsync(cancellationToken);
+            MarkSessionDirty();
+            Console.WriteLine("> System: 会话已重置。");
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void PrintHelp()
+    {
+        Console.WriteLine("> System: 可用命令 /help /history /save /reset /clear /cls /exit");
+        Console.WriteLine("> System: 执行中按 Esc 可中断当前代理。");
     }
 
     private async Task CancelAgentAsync(CancellationTokenSource source)
@@ -169,7 +240,9 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private async Task SafeSaveAsync(AgentSession session, CancellationToken cancellationToken, bool force)
     {
         if (!force && !ShouldSaveSession())
+        {
             return;
+        }
 
         var stopwatch = Stopwatch.StartNew();
         try
@@ -189,11 +262,15 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private bool ShouldSaveSession()
     {
         if (!_sessionDirty)
+        {
             return false;
+        }
 
         var debounceSeconds = _sessionOptions.SaveDebounceSeconds;
         if (debounceSeconds <= 0)
+        {
             return true;
+        }
 
         var elapsed = DateTimeOffset.UtcNow - _lastSavedAt;
         return elapsed.TotalSeconds >= debounceSeconds;

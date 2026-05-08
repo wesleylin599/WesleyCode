@@ -6,6 +6,7 @@ namespace WesleyCode.Services;
 
 internal sealed class AgentRunner : IAgentRunner
 {
+    private const int MaxEmptyResponseRetries = 8;
     private readonly AIAgent _agent;
 
     public AgentRunner(AIAgent agent)
@@ -24,8 +25,15 @@ internal sealed class AgentRunner : IAgentRunner
     public async Task<AgentResponse> RunAsync(string input, AgentSession session, CancellationToken cancellationToken)
     {
         var response = new AgentResponse(new ChatMessage(ChatRole.User, input));
-        do response = await _agent.RunAsync(response.Messages, session, cancellationToken: cancellationToken);
-        while (string.IsNullOrEmpty(response.Text));
-        return response;
+        for (var attempt = 0; attempt < MaxEmptyResponseRetries; attempt++)
+        {
+            response = await _agent.RunAsync(response.Messages, session, cancellationToken: cancellationToken);
+            if (!string.IsNullOrWhiteSpace(response.Text))
+            {
+                return response;
+            }
+        }
+
+        throw new InvalidOperationException("代理连续多次未返回可显示内容,请调整输入后重试。");
     }
 }

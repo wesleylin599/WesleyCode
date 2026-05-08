@@ -31,6 +31,10 @@ internal static class ServiceCollectionExtensions
                 config.ModelId = configuration.GetValue<string>("WINTEAM_MODELID") ?? "gpt-5.2";
                 config.BaseUrl = configuration.GetValue<string>("WINTEAM_BASEURL") ?? string.Empty;
                 config.ApiKey = configuration.GetValue<string>("WINTEAM_APIKEY") ?? string.Empty;
+
+                //config.ModelId = "gpt-oss:20b";
+                //config.BaseUrl = "http://192.168.2.180:21434/v1";
+                //config.ApiKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJgMtR3MZk530psl6XaWUhJ1eo+9A4GA77QoyCJ4ChWU";
             });
         services
             .AddOptions<AgentOptions>()
@@ -71,12 +75,26 @@ internal static class ServiceCollectionExtensions
         {
             var logger = provider.GetRequiredService<ILogger<OpenAiOptions>>();
             var options = provider.GetRequiredService<IOptions<OpenAiOptions>>().Value;
-            logger.LogInformation($"BaseUrl:{options.BaseUrl}");
-            logger.LogInformation($"ModelId:{options.ModelId}");
-            var client = new OpenAIClient(
-                new ApiKeyCredential(options.ApiKey),
-                new OpenAIClientOptions { Endpoint = new Uri(options.BaseUrl), MessageLoggingPolicy = new LoggingAuthPolicy(false, true) }
-            );
+            if (string.IsNullOrWhiteSpace(options.ApiKey))
+            {
+                throw new InvalidOperationException("未配置 OpenAI API Key，请设置 WINTEAM_APIKEY。");
+            }
+
+            logger.LogInformation("BaseUrl:{BaseUrl}", string.IsNullOrWhiteSpace(options.BaseUrl) ? "(default)" : options.BaseUrl);
+            logger.LogInformation("ModelId:{ModelId}", options.ModelId);
+
+            var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, true) };
+            if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+            {
+                if (!Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var endpoint))
+                {
+                    throw new InvalidOperationException($"BaseUrl 配置无效: {options.BaseUrl}");
+                }
+
+                clientOptions.Endpoint = endpoint;
+            }
+
+            var client = new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions);
             var baseClient = client.GetResponsesClient().AsIChatClient(options.ModelId);
             return CrsChatClient.Create(baseClient);
         });
@@ -94,7 +112,9 @@ internal static class ServiceCollectionExtensions
             var options = provider.GetRequiredService<IOptions<CacheOptions>>().Value;
             var cacheOptions = new MemoryDistributedCacheOptions();
             if (options.SizeLimit > 0)
+            {
                 cacheOptions.SizeLimit = options.SizeLimit;
+            }
             return new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(cacheOptions));
         });
 
