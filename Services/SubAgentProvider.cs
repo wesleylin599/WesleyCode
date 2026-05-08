@@ -61,17 +61,18 @@ internal class SubAgentProvider : AIContextProvider
         new ReasoningOptions { Output = ReasoningOutput.Full }
     );
 
+    private static string AgentPrompt = string.Empty;
+
+    private readonly AITool[] _tools;
+    private readonly IChatClient _client;
+    private readonly AIContextProvider[] _providers;
+    private readonly ILogger<SubAgentProvider> _logger;
     private readonly Dictionary<string, AgentContent> _agents = new(StringComparer.OrdinalIgnoreCase)
     {
         [planner.Name] = planner,
         [executor.Name] = executor,
         [reviewer.Name] = reviewer,
     };
-
-    private readonly AITool[] _tools;
-    private readonly IChatClient _client;
-    private readonly AIContextProvider[] _providers;
-    private readonly ILogger<SubAgentProvider> _logger;
 
     public SubAgentProvider(IChatClient client, AIContextProvider[]? providers = null, ILoggerFactory? loggerFactory = null)
     {
@@ -83,29 +84,12 @@ internal class SubAgentProvider : AIContextProvider
 
     protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
-        var sb = new StringBuilder();
-        foreach (var agentContent in _agents.Values)
+        if (string.IsNullOrEmpty(AgentPrompt))
         {
-            sb.AppendLine("  <agent>");
-            sb.AppendLine($"    <name>{SecurityElement.Escape(agentContent.Name)}</name>");
-            sb.AppendLine($"    <description>{SecurityElement.Escape(agentContent.Description)}</description>");
-            sb.AppendLine($"    <tools>");
-            if (agentContent.Tools is not null)
-            {
-                foreach (var tool in agentContent.Tools)
-                {
-                    sb.AppendLine($"        <tool>");
-                    sb.AppendLine($"            <name>{SecurityElement.Escape(tool.Name)}</name>");
-                    sb.AppendLine($"            <description>{SecurityElement.Escape(tool.Description)}</description>");
-                    sb.AppendLine($"        </tool>");
-                }
-            }
-            sb.AppendLine($"    </tools>");
-            sb.AppendLine("  </agent>");
-            _logger.LogInformation($"Loaded subAgent: {agentContent.Name}");
+            AgentPrompt = BuildAgentPrompt();
         }
         _logger.LogInformation($"Successfully loaded {_agents.Count} subAgent");
-        var instructionPrompt = string.Format(DefaultInstructionPrompt, sb.ToString().TrimEnd());
+        var instructionPrompt = string.Format(DefaultInstructionPrompt, AgentPrompt);
         return new AIContext { Instructions = instructionPrompt, Tools = this._tools };
     }
 
@@ -158,5 +142,31 @@ internal class SubAgentProvider : AIContextProvider
         );
 
         return string.IsNullOrEmpty(response.Text) ? "Error:未获取到输出结果" : response.Text;
+    }
+
+    private string BuildAgentPrompt()
+    {
+        var sb = new StringBuilder();
+        foreach (var agentContent in _agents.Values)
+        {
+            sb.AppendLine("  <agent>");
+            sb.AppendLine($"    <name>{SecurityElement.Escape(agentContent.Name)}</name>");
+            sb.AppendLine($"    <description>{SecurityElement.Escape(agentContent.Description)}</description>");
+            sb.AppendLine($"    <tools>");
+            if (agentContent.Tools is not null)
+            {
+                foreach (var tool in agentContent.Tools)
+                {
+                    sb.AppendLine($"        <tool>");
+                    sb.AppendLine($"            <name>{SecurityElement.Escape(tool.Name)}</name>");
+                    sb.AppendLine($"            <description>{SecurityElement.Escape(tool.Description)}</description>");
+                    sb.AppendLine($"        </tool>");
+                }
+            }
+            sb.AppendLine($"    </tools>");
+            sb.AppendLine("  </agent>");
+            _logger.LogInformation($"Loaded subAgent: {agentContent.Name}");
+        }
+        return sb.ToString().TrimEnd();
     }
 }

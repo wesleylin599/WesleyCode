@@ -7,6 +7,7 @@ namespace WesleyCode.Services;
 internal class SystemPromptProvider : AIContextProvider
 {
     private const string _promptName = "SYSTEM.md";
+    private static string AgentPrompt = string.Empty;
 
     private readonly string _workDirectory;
     private readonly ILogger<SystemPromptProvider> _logger;
@@ -18,6 +19,15 @@ internal class SystemPromptProvider : AIContextProvider
     }
 
     protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(AgentPrompt))
+        {
+            AgentPrompt = await BuildPromptAsync(cancellationToken);
+        }
+        return new AIContext { Instructions = AgentPrompt };
+    }
+
+    private async Task<string> BuildPromptAsync(CancellationToken cancellationToken = default)
     {
         var local = Path.Combine(_workDirectory, _promptName);
         var main = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _promptName);
@@ -36,6 +46,6 @@ internal class SystemPromptProvider : AIContextProvider
             var prompt = await File.ReadAllTextAsync(main, cancellationToken);
             builder.AppendLine(prompt);
         }
-        return new AIContext { Instructions = builder.ToString() };
+        return builder.ToString();
     }
 }
