@@ -79,7 +79,13 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             {
                 await Task.Delay(100, stoppingToken);
                 Console.Write("> User : ");
-                var input = Console.ReadLine();
+                var input = await ReadInputAsync(stoppingToken);
+                if (input is null)
+                {
+                    _logger.LogInformation("Standard input closed; exiting console loop.");
+                    break;
+                }
+
                 if (string.IsNullOrWhiteSpace(input))
                 {
                     continue;
@@ -96,15 +102,29 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 }
 
                 using var source = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                var task = CancelAgentAsync(source);
-                var stopwatch = Stopwatch.StartNew();
-                var response = await _agentRunner.RunAsync(input, _session!, source.Token);
-                stopwatch.Stop();
-                Console.WriteLine($"> Agent: {response.Text}");
-                _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
-                MarkSessionDirty();
-                source.Cancel();
-                await task;
+                var cancelTask = CancelAgentAsync(source);
+                try
+                {
+                    var stopwatch = Stopwatch.StartNew();
+                    var response = await _agentRunner.RunAsync(input, _session!, source.Token);
+                    stopwatch.Stop();
+                    Console.WriteLine($"> Agent: {response.Text}");
+                    _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
+                    MarkSessionDirty();
+                }
+                catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)
+                {
+                    Console.WriteLine("> System: 已取消当前代理执行。");
+                }
+                finally
+                {
+                    source.Cancel();
+                    await cancelTask;
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
@@ -119,6 +139,11 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 Console.ResetColor();
             }
         }
+    }
+
+    private static Task<string?> ReadInputAsync(CancellationToken cancellationToken)
+    {
+        return Task.Run(static () => Console.ReadLine()).WaitAsync(cancellationToken);
     }
 
     private async Task PrintHistoryAsync(AgentSession activeSession, CancellationToken cancellationToken)

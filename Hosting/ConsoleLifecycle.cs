@@ -16,18 +16,32 @@ internal sealed class ConsoleLifecycle : IDisposable
     private void Console_CancelKeyPress(object? sender, ConsoleCancelEventArgs e)
     {
         e.Cancel = true;
-        _cts.Cancel();
+        TryCancel();
     }
 
     private void OnProcessExit(object? sender, EventArgs e)
     {
-        _cts.Cancel();
+        TryCancel();
     }
 
     public void Dispose()
     {
-        _cts.Dispose();
         Console.CancelKeyPress -= Console_CancelKeyPress;
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        _cts.Dispose();
+    }
+
+    private void TryCancel()
+    {
+        if (_cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            _cts.Cancel();
+        }
+        catch (ObjectDisposedException) { }
     }
 }

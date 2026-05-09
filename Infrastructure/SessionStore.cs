@@ -10,6 +10,7 @@ namespace WesleyCode.Infrastructure;
 
 internal sealed class SessionStore : ISessionStore
 {
+    private static readonly UTF8Encoding SessionEncoding = new(false);
     private readonly IAgentRunner _agentRunner;
     private readonly SessionOptions _options;
     private readonly ILogger<SessionStore> _logger;
@@ -34,12 +35,23 @@ internal sealed class SessionStore : ISessionStore
         try
         {
             var content = await File.ReadAllTextAsync(_sessionHistoryPath, Encoding.UTF8, cancellationToken);
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                await BackupInvalidSessionAsync("会话文件为空", cancellationToken);
+                return await _agentRunner.CreateSessionAsync(cancellationToken);
+            }
+
             var element = JsonSerializer.Deserialize<JsonElement>(content);
             return await _agentRunner.DeserializeSessionAsync(element, cancellationToken);
         }
-        catch (JsonException ex)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning(ex, "Failed to parse session history JSON, starting new session: {SessionPath}", _sessionHistoryPath);
+            throw;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            await BackupInvalidSessionAsync("会话文件损坏或无法读取", cancellationToken);
+            _logger.LogWarning(ex, "Failed to load session history, starting new session: {SessionPath}", _sessionHistoryPath);
             return await _agentRunner.CreateSessionAsync(cancellationToken);
         }
     }
@@ -50,9 +62,30 @@ internal sealed class SessionStore : ISessionStore
         var directory = Path.GetDirectoryName(_sessionHistoryPath);
         if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
             Directory.CreateDirectory(directory);
-        var tempPath = Path.Combine(directory ?? string.Empty, Path.GetFileName(_sessionHistoryPath) + ".tmp");
-        await File.WriteAllTextAsync(tempPath, element.GetRawText(), Encoding.UTF8, cancellationToken);
-        File.Move(tempPath, _sessionHistoryPath, true);
+        var tempPath = Path.Combine(
+            directory ?? string.Empty,
+            $"{Path.GetFileName(_sessionHistoryPath)}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp"
+        );
+
+        try
+        {
+            await File.WriteAllTextAsync(tempPath, element.GetRawText(), SessionEncoding, cancellationToken);
+            if (File.Exists(_sessionHistoryPath))
+            {
+                File.Replace(tempPath, _sessionHistoryPath, null, ignoreMetadataErrors: true);
+            }
+            else
+            {
+                File.Move(tempPath, _sessionHistoryPath);
+            }
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
     }
 
     public Task ClearAsync(CancellationToken cancellationToken)
@@ -72,5 +105,33 @@ internal sealed class SessionStore : ISessionStore
         var hash = md5.ComputeHash(bytes);
         var segment = BitConverter.ToString(hash, 4, 8);
         return segment.Replace("-", string.Empty);
+    }
+
+    private async Task BackupInvalidSessionAsync(string reason, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(_sessionHistoryPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var directory = Path.GetDirectoryName(_sessionHistoryPath) ?? AppContext.BaseDirectory;
+            Directory.CreateDirectory(directory);
+            var backupPath = Path.Combine(
+                directory,
+                $"{Path.GetFileNameWithoutExtension(_sessionHistoryPath)}.{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}.corrupt{Path.GetExtension(_sessionHistoryPath)}"
+            );
+            File.Move(_sessionHistoryPath, backupPath);
+            _logger.LogWarning("{Reason}，已备份原会话文件: {BackupPath}", reason, backupPath);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "{Reason}，但备份会话文件失败: {SessionPath}", reason, _sessionHistoryPath);
+        }
     }
 }

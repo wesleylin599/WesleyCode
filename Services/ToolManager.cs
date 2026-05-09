@@ -41,8 +41,28 @@ public class ToolManager
         string callback;
         try
         {
+            if (string.IsNullOrWhiteSpace(command.FileName))
+            {
+                callback = "Error: 工具名称为空";
+                ToolConsoleLog(callback);
+                return ToolResult(callback);
+            }
+
+            var workingDirectory = string.IsNullOrWhiteSpace(command.WorkingDirectory)
+                ? Directory.GetCurrentDirectory()
+                : Path.GetFullPath(command.WorkingDirectory);
+            if (!Directory.Exists(workingDirectory))
+            {
+                callback = $"Error: 工作目录不存在: {workingDirectory}";
+                ToolConsoleLog(callback);
+                return ToolResult(callback);
+            }
+
+            var timeoutSeconds = command.TimeoutSeconds <= 0 ? 300 : Math.Min(command.TimeoutSeconds, 3600);
             using var standardOutputStream = new MemoryStream();
             using var standardErrorStream = new MemoryStream();
+            using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.Write("$ run ");
             Console.ForegroundColor = ConsoleColor.DarkYellow;
@@ -51,24 +71,29 @@ public class ToolManager
 
             var cli = Cli.Wrap(command.FileName)
                 .WithArguments(command.Arguments)
-                .WithWorkingDirectory(command.WorkingDirectory)
+                .WithWorkingDirectory(workingDirectory)
                 .WithStandardOutputPipe(PipeTarget.ToStream(standardOutputStream))
                 .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream))
                 .WithValidation(CommandResultValidation.None);
 
-            var result = await cli.ExecuteAsync(cancellationToken);
+            var result = await cli.ExecuteAsync(timeoutSource.Token);
             var standardOutput = DecodeCommandOutput(standardOutputStream.ToArray());
             var standardError = DecodeCommandOutput(standardErrorStream.ToArray());
 
             callback = $"[{result.ExitCode}]{standardOutput}{standardError}";
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            callback = "Error: 命令执行超时";
         }
         catch (Exception ex)
         {
             callback = $"Error: {ex.Message}";
         }
 
-        ToolConsoleLog(callback);
-        return ToolResult(callback);
+        var output = ToolResult(callback);
+        ToolConsoleLog(output);
+        return output;
     }
 
     [Description("读取文件内容并返回实际字符编码")]
@@ -96,8 +121,9 @@ public class ToolManager
             callback = $"Error: {ex.Message}";
         }
 
-        ToolConsoleLog(callback);
-        return ToolResult(callback);
+        var output = ToolResult(callback);
+        ToolConsoleLog(output);
+        return output;
     }
 
     [Description("请求网络地址获取结果")]
@@ -106,13 +132,22 @@ public class ToolManager
         string callback;
         try
         {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                callback = "Error: 仅支持 http/https 绝对地址";
+                ToolConsoleLog(callback);
+                return ToolResult(callback);
+            }
+
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.Write("$ web search ");
             Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.WriteLine(url);
+            Console.WriteLine(uri);
             Console.ResetColor();
 
-            var response = await _httpClient.GetAsync(url, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            request.Headers.UserAgent.ParseAdd("WesleyCode/1.0");
+            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             callback = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -122,8 +157,9 @@ public class ToolManager
             callback = $"Error: {ex.Message}";
         }
 
-        ToolConsoleLog(callback);
-        return ToolResult(callback);
+        var output = ToolResult(callback);
+        ToolConsoleLog(output);
+        return output;
     }
 
     [Description("更新任务清单,调用需要传入完整的工作清单,任务状态只有: 未开始, 进行中, 已完成")]
@@ -201,8 +237,9 @@ public class ToolManager
             callback = $"Error: {ex.Message}";
         }
 
-        ToolConsoleLog(callback);
-        return ToolResult(callback);
+        var output = ToolResult(callback);
+        ToolConsoleLog(output);
+        return output;
     }
 
     [Description("替换文件中的文本内容")]
@@ -258,8 +295,9 @@ public class ToolManager
             callback = $"Error: {ex.Message}";
         }
 
-        ToolConsoleLog(callback);
-        return ToolResult(callback);
+        var output = ToolResult(callback);
+        ToolConsoleLog(output);
+        return output;
     }
 
     public static string BuildDiff(string oldText, string newText)
@@ -388,14 +426,15 @@ public class ToolManager
     private record CommandItem(
         [Description("工具名称")] string FileName,
         [Description("工具工作目录")] string WorkingDirectory,
-        [Description("工具参数集合")] List<string> Arguments
+        [Description("工具参数集合")] List<string> Arguments,
+        [Description("执行超时秒数,默认 300 秒,最大 3600 秒")] int TimeoutSeconds = 300
     );
 
     private record TaskItem(
         [Description("任务序号")] string Num,
         [Description("任务标题")] string Title,
-        [Description("任务状态")] string Status,
         [Description("任务详情")] string Content,
-        [Description("执行结果")] string Result
+        [Description("执行结果")] string Result,
+        [Description("任务状态")] string Status = "未开始"
     );
 }
