@@ -10,7 +10,7 @@ namespace WesleyCode.Infrastructure;
 
 internal sealed class SessionStore : ISessionStore
 {
-    private static readonly UTF8Encoding SessionEncoding = new(false);
+    private static readonly UTF8Encoding SessionEncoding = new(true);
     private readonly IAgentRunner _agentRunner;
     private readonly SessionOptions _options;
     private readonly ILogger<SessionStore> _logger;

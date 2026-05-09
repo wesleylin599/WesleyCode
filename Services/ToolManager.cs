@@ -9,28 +9,28 @@ using WesleyCode.Infrastructure;
 
 namespace WesleyCode.Services;
 
-public class ToolManager
+internal static class ToolManager
 {
-    private const int MAX_LOG_LINE = 10;
-    private const int MAX_LOG_LENGTH = 30000;
+    private const int MaxLogLine = 10;
+    private const int MaxLogLength = 30000;
     private static readonly UTF8Encoding Utf8StrictEncoding = new(false, true);
 
-    private static readonly List<TaskItem> _task = new();
+    private static readonly List<TaskItem> Tasks = [];
     private static readonly object TaskSync = new();
-    private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     static ToolManager()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 
-    public static AITool CommandFunction = AIFunctionFactory.Create(Command);
-    public static AITool ReadFileFunction = AIFunctionFactory.Create(ReadFile);
-    public static AITool WebSearchFunction = AIFunctionFactory.Create(WebSearch);
-    public static AITool ReadTasksFunction = AIFunctionFactory.Create(ReadTasks);
-    public static AITool EditFileFunction = AIFunctionFactory.Create(EditFile);
-    public static AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile);
-    public static AITool UpdateTasksFunction = AIFunctionFactory.Create(UpdateTasks);
+    public static readonly AITool CommandFunction = AIFunctionFactory.Create(Command);
+    public static readonly AITool ReadFileFunction = AIFunctionFactory.Create(ReadFile);
+    public static readonly AITool WebSearchFunction = AIFunctionFactory.Create(WebSearch);
+    public static readonly AITool ReadTasksFunction = AIFunctionFactory.Create(ReadTasks);
+    public static readonly AITool EditFileFunction = AIFunctionFactory.Create(EditFile);
+    public static readonly AITool WriteFileFunction = AIFunctionFactory.Create(WriteFile);
+    public static readonly AITool UpdateTasksFunction = AIFunctionFactory.Create(UpdateTasks);
 
     public static readonly AITool[] ReadFunctions = [CommandFunction, ReadFileFunction, WebSearchFunction, ReadTasksFunction];
     public static readonly AITool[] AllFunctions = [.. ReadFunctions, EditFileFunction, WriteFileFunction, UpdateTasksFunction];
@@ -58,6 +58,7 @@ public class ToolManager
                 return ToolResult(callback);
             }
 
+            var arguments = command.Arguments ?? [];
             var timeoutSeconds = command.TimeoutSeconds <= 0 ? 300 : Math.Min(command.TimeoutSeconds, 3600);
             using var standardOutputStream = new MemoryStream();
             using var standardErrorStream = new MemoryStream();
@@ -66,11 +67,11 @@ public class ToolManager
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.Write("$ run ");
             Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.WriteLine($"{command.FileName} {string.Join(" ", command.Arguments)}");
+            Console.WriteLine($"{command.FileName} {string.Join(" ", arguments)}");
             Console.ResetColor();
 
             var cli = Cli.Wrap(command.FileName)
-                .WithArguments(command.Arguments)
+                .WithArguments(arguments)
                 .WithWorkingDirectory(workingDirectory)
                 .WithStandardOutputPipe(PipeTarget.ToStream(standardOutputStream))
                 .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream))
@@ -147,7 +148,7 @@ public class ToolManager
 
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.UserAgent.ParseAdd("WesleyCode/1.0");
-            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             callback = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -163,14 +164,15 @@ public class ToolManager
     }
 
     [Description("更新任务清单,调用需要传入完整的工作清单,任务状态只有: 未开始, 进行中, 已完成")]
-    private static string UpdateTasks([Description("任务清单列表")] List<TaskItem> tasks)
+    private static string UpdateTasks([Description("任务清单列表")] List<TaskItem>? tasks)
     {
+        tasks ??= [];
         lock (TaskSync)
         {
-            _task.Clear();
+            Tasks.Clear();
             foreach (var item in tasks)
             {
-                _task.Add(item);
+                Tasks.Add(item);
             }
         }
 
@@ -190,7 +192,7 @@ public class ToolManager
         List<TaskItem> snapshot;
         lock (TaskSync)
         {
-            snapshot = _task.Select(item => item with { }).ToList();
+            snapshot = Tasks.Select(item => item with { }).ToList();
         }
 
         Console.ForegroundColor = ConsoleColor.Yellow;
@@ -203,7 +205,7 @@ public class ToolManager
     private static async Task<string> WriteFile(
         [Description("文件路径")] string path,
         [Description("文本内容")] string content,
-        [Description("写入的字符编码,支持 auto / utf-8 / utf-8-bom")] string encoding,
+        [Description("写入的字符编码,支持 auto / utf-8 / utf-8-bom")] string encoding = "auto",
         CancellationToken cancellationToken = default
     )
     {
@@ -247,7 +249,7 @@ public class ToolManager
         [Description("文件路径")] string path,
         [Description("旧文本内容")] string oldText,
         [Description("新文本内容")] string newText,
-        [Description("写入的字符编码,支持 auto / utf-8 / utf-8-bom")] string encoding,
+        [Description("写入的字符编码,支持 auto / utf-8 / utf-8-bom")] string encoding = "auto",
         CancellationToken cancellationToken = default
     )
     {
@@ -401,7 +403,7 @@ public class ToolManager
         for (int i = 0; i < lines.Count; i++)
         {
             var line = lines[i];
-            if (lines.Count > MAX_LOG_LINE && i > MAX_LOG_LINE / 2 && i < lines.Count - MAX_LOG_LINE / 2)
+            if (lines.Count > MaxLogLine && i > MaxLogLine / 2 && i < lines.Count - MaxLogLine / 2)
             {
                 if (!isTruncated)
                 {
@@ -420,13 +422,13 @@ public class ToolManager
 
     private static string ToolResult(string args)
     {
-        return args.Length > MAX_LOG_LENGTH ? $"{args[..MAX_LOG_LENGTH]} ..." : args;
+        return args.Length > MaxLogLength ? $"{args[..MaxLogLength]} ..." : args;
     }
 
     private record CommandItem(
         [Description("工具名称")] string FileName,
         [Description("工具工作目录")] string WorkingDirectory,
-        [Description("工具参数集合")] List<string> Arguments,
+        [Description("工具参数集合")] List<string>? Arguments,
         [Description("执行超时秒数,默认 300 秒,最大 3600 秒")] int TimeoutSeconds = 300
     );
 
