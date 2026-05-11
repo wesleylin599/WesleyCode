@@ -2,6 +2,7 @@
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using WesleyCode.Extensions;
 using WesleyCode.Options;
 using WesleyCode.Services;
 
@@ -9,7 +10,7 @@ namespace WesleyCode.Hosting;
 
 internal sealed class ConsoleAgentHostedService : BackgroundService
 {
-    private readonly IAgentRunner _agentRunner;
+    private readonly AIAgent _agentRunner;
     private readonly ISessionStore _sessionStore;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<ConsoleAgentHostedService> _logger;
@@ -19,7 +20,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private bool _sessionDirty;
 
     public ConsoleAgentHostedService(
-        IAgentRunner agentRunner,
+        AIAgent agentRunner,
         ISessionStore sessionStore,
         IHostApplicationLifetime lifetime,
         IOptions<SessionOptions> sessionOptions,
@@ -106,7 +107,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 try
                 {
                     var stopwatch = Stopwatch.StartNew();
-                    var response = await _agentRunner.RunAsync(input, _session!, source.Token);
+                    var response = await _agentRunner.ExecuteAsync(input, _session!, source.Token);
                     stopwatch.Stop();
                     Console.WriteLine($"> Agent: {response.Text}");
                     _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);

@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using WesleyCode.Extensions;
 
 namespace WesleyCode.Services;
 
@@ -129,15 +130,7 @@ internal sealed class SubAgentProvider : AIContextProvider
         );
         var session = await subAgent.CreateSessionAsync(cancellationToken);
 
-        var response = new AgentResponse(new ChatMessage(ChatRole.User, input));
-        for (var attempt = 0; attempt < 8; attempt++)
-        {
-            response = await subAgent.RunAsync(response.Messages, session, cancellationToken: cancellationToken);
-            if (!string.IsNullOrWhiteSpace(response.Text))
-            {
-                break;
-            }
-        }
+        var response = await subAgent.ExecuteAsync(input, session, cancellationToken: cancellationToken);
 
         _logger.LogInformation(
             $"""

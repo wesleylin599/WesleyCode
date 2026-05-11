@@ -11,12 +11,12 @@ namespace WesleyCode.Infrastructure;
 internal sealed class SessionStore : ISessionStore
 {
     private static readonly UTF8Encoding SessionEncoding = new(true);
-    private readonly IAgentRunner _agentRunner;
+    private readonly AIAgent _agentRunner;
     private readonly SessionOptions _options;
     private readonly ILogger<SessionStore> _logger;
     private readonly string _sessionHistoryPath;
 
-    public SessionStore(IAgentRunner agentRunner, IOptions<SessionOptions> options, ILogger<SessionStore> logger)
+    public SessionStore(AIAgent agentRunner, IOptions<SessionOptions> options, ILogger<SessionStore> logger)
     {
         _agentRunner = agentRunner;
         _options = options.Value;
@@ -42,7 +42,7 @@ internal sealed class SessionStore : ISessionStore
             }
 
             var element = JsonSerializer.Deserialize<JsonElement>(content);
-            return await _agentRunner.DeserializeSessionAsync(element, cancellationToken);
+            return await _agentRunner.DeserializeSessionAsync(element, cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -58,7 +58,7 @@ internal sealed class SessionStore : ISessionStore
 
     public async Task SaveAsync(AgentSession session, CancellationToken cancellationToken)
     {
-        var element = await _agentRunner.SerializeSessionAsync(session, cancellationToken);
+        var element = await _agentRunner.SerializeSessionAsync(session, cancellationToken: cancellationToken);
         var directory = Path.GetDirectoryName(_sessionHistoryPath);
         if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
             Directory.CreateDirectory(directory);

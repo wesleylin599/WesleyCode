@@ -207,7 +207,6 @@ internal static class ServiceCollectionExtensions
             );
         });
 
-        services.AddSingleton<IAgentRunner, AgentRunner>();
         services.AddSingleton<ISessionStore, SessionStore>();
         services.AddHostedService<ConsoleAgentHostedService>();
 
