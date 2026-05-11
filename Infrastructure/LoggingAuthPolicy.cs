@@ -11,7 +11,7 @@ internal class LoggingAuthPolicy : PipelinePolicy
     private readonly bool _logResponseBody;
 
     public LoggingAuthPolicy()
-        : this(logRequestBody: true, logResponseBody: true) { }
+        : this(logRequestBody: false, logResponseBody: false) { }
 
     public LoggingAuthPolicy(bool logRequestBody, bool logResponseBody)
     {
@@ -82,7 +82,8 @@ internal class LoggingAuthPolicy : PipelinePolicy
             using var ms = new MemoryStream();
             message.Response.ContentStream.CopyTo(ms);
             var body = Encoding.UTF8.GetString(ms.ToArray());
-            throw new HttpRequestException(body);
+            var preview = body.Length <= 2048 ? body : body[..2048];
+            throw new HttpRequestException($"HTTP error response body (preview): {preview}");
         }
     }
 
@@ -93,7 +94,8 @@ internal class LoggingAuthPolicy : PipelinePolicy
             using var ms = new MemoryStream();
             await message.Response.ContentStream.CopyToAsync(ms);
             var body = Encoding.UTF8.GetString(ms.ToArray());
-            throw new HttpRequestException(body);
+            var preview = body.Length <= 2048 ? body : body[..2048];
+            throw new HttpRequestException($"HTTP error response body (preview): {preview}");
         }
     }
 }

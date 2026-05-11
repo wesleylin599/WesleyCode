@@ -72,79 +72,31 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         await base.StopAsync(cancellationToken);
     }
 
-    private async Task RunLoopAsync(CancellationToken stoppingToken)
-    {
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await Task.Delay(100, stoppingToken);
-                Console.Write("> User : ");
-                var input = await ReadInputAsync(stoppingToken);
-                if (input is null)
-                {
-                    _logger.LogInformation("Standard input closed; exiting console loop.");
-                    break;
-                }
-
-                if (string.IsNullOrWhiteSpace(input))
-                {
-                    continue;
-                }
-
-                if (string.Equals(input, "/exit", StringComparison.OrdinalIgnoreCase))
-                {
-                    break;
-                }
-
-                if (await TryHandleCommandAsync(input, stoppingToken))
-                {
-                    continue;
-                }
-
-                using var source = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                var cancelTask = CancelAgentAsync(source);
-                try
-                {
-                    var stopwatch = Stopwatch.StartNew();
-                    var response = await _agentRunner.ExecuteAsync(input, _session!, source.Token);
-                    stopwatch.Stop();
-                    Console.WriteLine($"> Agent: {response.Text}");
-                    _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
-                    MarkSessionDirty();
-                }
-                catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)
-                {
-                    Console.WriteLine("> System: 已取消当前代理执行。");
-                }
-                finally
-                {
-                    source.Cancel();
-                    await cancelTask;
-                }
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"> Agent: {ex.Message}");
-            }
-            finally
-            {
-                if (_session != null)
-                {
-                    await SafeSaveAsync(_session, stoppingToken, force: false);
-                }
-                Console.ResetColor();
-            }
-        }
-    }
-
     private static Task<string?> ReadInputAsync(CancellationToken cancellationToken)
     {
         return Task.Run(static () => Console.ReadLine()).WaitAsync(cancellationToken);
+    }
+
+    private async Task SafeSaveAsync(AgentSession session, CancellationToken cancellationToken, bool force)
+    {
+        if (!force && !ShouldSaveSession())
+        {
+            return;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            await _sessionStore.SaveAsync(session, cancellationToken);
+            stopwatch.Stop();
+            _lastSavedAt = DateTimeOffset.UtcNow;
+            _sessionDirty = false;
+            _logger.LogInformation("Session persisted in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to persist session.");
+        }
     }
 
     private async Task PrintHistoryAsync(AgentSession activeSession, CancellationToken cancellationToken)
@@ -233,12 +185,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         return false;
     }
 
-    private static void PrintHelp()
-    {
-        Console.WriteLine("> System: 可用命令 /help /history /save /reset /clear /cls /exit");
-        Console.WriteLine("> System: 执行中按 Esc 可中断当前代理。");
-    }
-
     private async Task CancelAgentAsync(CancellationTokenSource source)
     {
         while (!source.IsCancellationRequested)
@@ -263,25 +209,73 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         }
     }
 
-    private async Task SafeSaveAsync(AgentSession session, CancellationToken cancellationToken, bool force)
+    private async Task RunLoopAsync(CancellationToken stoppingToken)
     {
-        if (!force && !ShouldSaveSession())
+        while (!stoppingToken.IsCancellationRequested)
         {
-            return;
-        }
+            try
+            {
+                await Task.Delay(100, stoppingToken);
+                Console.Write("> User : ");
+                var input = await ReadInputAsync(stoppingToken);
+                if (input is null)
+                {
+                    _logger.LogInformation("Standard input closed; exiting console loop.");
+                    break;
+                }
 
-        var stopwatch = Stopwatch.StartNew();
-        try
-        {
-            await _sessionStore.SaveAsync(session, cancellationToken);
-            stopwatch.Stop();
-            _lastSavedAt = DateTimeOffset.UtcNow;
-            _sessionDirty = false;
-            _logger.LogInformation("Session persisted in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to persist session.");
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    continue;
+                }
+
+                if (string.Equals(input, "/exit", StringComparison.OrdinalIgnoreCase))
+                {
+                    break;
+                }
+
+                if (await TryHandleCommandAsync(input, stoppingToken))
+                {
+                    continue;
+                }
+
+                using var source = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                var cancelTask = CancelAgentAsync(source);
+                try
+                {
+                    var stopwatch = Stopwatch.StartNew();
+                    var response = await _agentRunner.ExecuteAsync(input, _session!, source.Token);
+                    stopwatch.Stop();
+                    Console.WriteLine($"> Agent: {response.Text}");
+                    _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
+                    MarkSessionDirty();
+                }
+                catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)
+                {
+                    Console.WriteLine("> System: 已取消当前代理执行。");
+                }
+                finally
+                {
+                    source.Cancel();
+                    await cancelTask;
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"> Agent: {ex.Message}");
+            }
+            finally
+            {
+                if (_session != null)
+                {
+                    await SafeSaveAsync(_session, stoppingToken, force: false);
+                }
+                Console.ResetColor();
+            }
         }
     }
 
@@ -305,5 +299,11 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private void MarkSessionDirty()
     {
         _sessionDirty = true;
+    }
+
+    private void PrintHelp()
+    {
+        Console.WriteLine("> System: 可用命令 /help /history /save /reset /clear /cls /exit");
+        Console.WriteLine("> System: 执行中按 Esc 可中断当前代理。");
     }
 }
