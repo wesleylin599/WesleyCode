@@ -1,7 +1,9 @@
-﻿using Microsoft.Extensions.AI;
+﻿using System.Diagnostics;
+using Microsoft.Extensions.AI;
 
 namespace WesleyCode.Infrastructure;
 
+[DebuggerStepThrough]
 public sealed class CrsChatClient : DelegatingChatClient
 {
     public static CrsChatClient Create(IChatClient innerClient) => new CrsChatClient(innerClient);
@@ -9,25 +11,11 @@ public sealed class CrsChatClient : DelegatingChatClient
     public CrsChatClient(IChatClient innerClient)
         : base(innerClient) { }
 
-    public override async Task<ChatResponse> GetResponseAsync(
+    public override Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default
-    )
-    {
-        try
-        {
-            return await this.GetStreamingResponseAsync(messages, options, cancellationToken).ToChatResponseAsync(cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return new ChatResponse([new ChatMessage(ChatRole.Assistant, ex.Message)]);
-        }
-    }
+    ) => this.GetStreamingResponseAsync(messages, options, cancellationToken).ToChatResponseAsync(cancellationToken);
 
     public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> messages,
