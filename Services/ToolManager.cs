@@ -74,13 +74,11 @@ internal static class ToolManager
         Tasks.Clear();
         foreach (var task in tasks ?? [])
         {
-            if (string.IsNullOrWhiteSpace(task.Num) || string.IsNullOrWhiteSpace(task.Title))
-            {
+            if (string.IsNullOrWhiteSpace(task.Num + task.Title))
                 continue;
-            }
-            Tasks.Add(task with { Status = string.IsNullOrWhiteSpace(task.Status) ? "未开始" : task.Status });
+            Tasks.Add(task);
         }
-        return "完成更新";
+        return $"完成更新,共{Tasks.Count}条任务";
     }
 
     [Description("获取任务清单")]
