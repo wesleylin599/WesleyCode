@@ -48,7 +48,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             _session = await _sessionStore.LoadAsync(stoppingToken);
             _lastSavedAt = DateTimeOffset.UtcNow;
             _sessionDirty = false;
-            await PrintHistoryAsync(_session, stoppingToken);
+            PrintHistory(_session);
             await RunLoopAsync(stoppingToken);
         }
         catch (OperationCanceledException) { }
@@ -69,11 +69,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             await SafeSaveAsync(_session, cancellationToken, force: true);
         }
         await base.StopAsync(cancellationToken);
-    }
-
-    private static Task<string?> ReadInputAsync(CancellationToken cancellationToken)
-    {
-        return Task.Run(static () => Console.ReadLine()).WaitAsync(cancellationToken);
     }
 
     private async Task SafeSaveAsync(AgentSession session, CancellationToken cancellationToken, bool force)
@@ -98,66 +93,8 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         }
     }
 
-    private Task PrintHistoryAsync(AgentSession activeSession, CancellationToken cancellationToken)
-    {
-        if (activeSession.TryGetInMemoryChatHistory(out var history) && history != null)
-        {
-            foreach (var message in history)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (string.IsNullOrEmpty(message.Text))
-                {
-                    message.Contents.ConsoleLog();
-                }
-                else if (message.Role == ChatRole.User)
-                {
-                    Console.WriteLine($"> User : {message.Text}");
-                }
-                else if (message.Role == ChatRole.Assistant)
-                {
-                    Console.WriteLine($"> Agent: {message.Text}");
-                }
-            }
-        }
-
-        return Task.CompletedTask;
-    }
-
     private async Task<bool> TryHandleCommandAsync(string input, CancellationToken cancellationToken)
     {
-        if (string.Equals(input, "/help", StringComparison.OrdinalIgnoreCase))
-        {
-            PrintHelp();
-            return true;
-        }
-
-        if (string.Equals(input, "/cls", StringComparison.OrdinalIgnoreCase))
-        {
-            Console.Clear();
-            return true;
-        }
-
-        if (string.Equals(input, "/history", StringComparison.OrdinalIgnoreCase))
-        {
-            if (_session != null)
-            {
-                await PrintHistoryAsync(_session, cancellationToken);
-            }
-
-            return true;
-        }
-
-        if (string.Equals(input, "/save", StringComparison.OrdinalIgnoreCase))
-        {
-            if (_session != null)
-            {
-                await SafeSaveAsync(_session, cancellationToken, force: true);
-                _logger.LogInformation("> System: 会话已保存。");
-            }
-
-            return true;
-        }
-
         if (string.Equals(input, "/reset", StringComparison.OrdinalIgnoreCase) || string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
         {
             if (string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
@@ -207,7 +144,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             {
                 await Task.Delay(100, stoppingToken);
                 Console.Write("> User : ");
-                var input = await ReadInputAsync(stoppingToken);
+                var input = Console.ReadLine();
                 if (input is null)
                 {
                     _logger.LogInformation("Standard input closed; exiting console loop.");
@@ -269,6 +206,28 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         }
     }
 
+    private void PrintHistory(AgentSession activeSession)
+    {
+        if (activeSession.TryGetInMemoryChatHistory(out var history) && history != null)
+        {
+            foreach (var message in history)
+            {
+                if (string.IsNullOrEmpty(message.Text))
+                {
+                    message.Contents.ConsoleLog();
+                }
+                else if (message.Role == ChatRole.User)
+                {
+                    Console.WriteLine($"> User : {message.Text}");
+                }
+                else if (message.Role == ChatRole.Assistant)
+                {
+                    Console.WriteLine($"> Agent: {message.Text}");
+                }
+            }
+        }
+    }
+
     private bool ShouldSaveSession()
     {
         if (!_sessionDirty)
@@ -289,11 +248,5 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private void MarkSessionDirty()
     {
         _sessionDirty = true;
-    }
-
-    private void PrintHelp()
-    {
-        _logger.LogInformation("> System: 可用命令 /help /history /save /reset /clear /cls /exit");
-        _logger.LogInformation("> System: 执行中按 Esc 可中断当前代理。");
     }
 }
