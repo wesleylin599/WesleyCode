@@ -49,7 +49,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             _lastSavedAt = DateTimeOffset.UtcNow;
             _sessionDirty = false;
             await PrintHistoryAsync(_session, stoppingToken);
-            PrintHelp();
             await RunLoopAsync(stoppingToken);
         }
         catch (OperationCanceledException) { }
@@ -99,38 +98,29 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         }
     }
 
-    private async Task PrintHistoryAsync(AgentSession activeSession, CancellationToken cancellationToken)
+    private Task PrintHistoryAsync(AgentSession activeSession, CancellationToken cancellationToken)
     {
         if (activeSession.TryGetInMemoryChatHistory(out var history) && history != null)
         {
             foreach (var message in history)
             {
-                if (string.IsNullOrWhiteSpace(message.Text) || message.Role == ChatRole.Tool)
+                cancellationToken.ThrowIfCancellationRequested();
+                if (string.IsNullOrEmpty(message.Text))
                 {
-                    continue;
+                    message.Contents.ConsoleLog();
                 }
-
-                string? target = null;
-                if (message.Role == ChatRole.User)
+                else if (message.Role == ChatRole.User)
                 {
-                    target = $"> User : {message.Text}";
+                    Console.WriteLine($"> User : {message.Text}");
                 }
                 else if (message.Role == ChatRole.Assistant)
                 {
-                    target = $"> Agent: {message.Text}";
+                    Console.WriteLine($"> Agent: {message.Text}");
                 }
-
-                if (string.IsNullOrEmpty(target))
-                {
-                    continue;
-                }
-
-                cancellationToken.ThrowIfCancellationRequested();
-                Console.WriteLine(target);
             }
         }
 
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     private async Task<bool> TryHandleCommandAsync(string input, CancellationToken cancellationToken)
@@ -162,7 +152,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             if (_session != null)
             {
                 await SafeSaveAsync(_session, cancellationToken, force: true);
-                Console.WriteLine("> System: 会话已保存。");
+                _logger.LogInformation("> System: 会话已保存。");
             }
 
             return true;
@@ -178,7 +168,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             await _sessionStore.ClearAsync(cancellationToken);
             _session = await _agentRunner.CreateSessionAsync(cancellationToken);
             MarkSessionDirty();
-            Console.WriteLine("> System: 会话已重置。");
+            _logger.LogInformation("> System: 会话已重置。");
             return true;
         }
 
@@ -303,7 +293,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
 
     private void PrintHelp()
     {
-        Console.WriteLine("> System: 可用命令 /help /history /save /reset /clear /cls /exit");
-        Console.WriteLine("> System: 执行中按 Esc 可中断当前代理。");
+        _logger.LogInformation("> System: 可用命令 /help /history /save /reset /clear /cls /exit");
+        _logger.LogInformation("> System: 执行中按 Esc 可中断当前代理。");
     }
 }
