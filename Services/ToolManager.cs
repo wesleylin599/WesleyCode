@@ -2,6 +2,7 @@
 using System.Text;
 using CliWrap;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace WesleyCode.Services;
 
@@ -15,6 +16,8 @@ internal static class ToolManager
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
+
+    public static ILoggerFactory LoggerFactory = NullLoggerFactory.Instance;
 
     public static readonly AITool CommandFunction = AIFunctionFactory.Create(Command);
     public static readonly AITool ReadTasksFunction = AIFunctionFactory.Create(ReadTasks);
@@ -31,12 +34,6 @@ internal static class ToolManager
             return "Error: 工具名称为空";
         }
 
-        var workPath = string.IsNullOrWhiteSpace(command.WorkPath) ? Directory.GetCurrentDirectory() : command.WorkPath;
-        if (!Directory.Exists(workPath))
-        {
-            return $"Error: 工作目录不存在: {workPath}";
-        }
-
         string output = string.Empty;
 
         try
@@ -50,7 +47,7 @@ internal static class ToolManager
 
             var cli = Cli.Wrap(command.FileName)
                 .WithArguments(arguments)
-                .WithWorkingDirectory(workPath)
+                .WithWorkingDirectory(Directory.GetCurrentDirectory())
                 .WithStandardOutputPipe(PipeTarget.ToStream(standardOutputStream))
                 .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream));
 
@@ -72,17 +69,21 @@ internal static class ToolManager
     private static string UpdateTasks([Description("任务清单列表")] List<TaskItem> tasks)
     {
         Tasks.Clear();
+        StringBuilder stringBuilder = new StringBuilder();
         foreach (var task in tasks ?? [])
         {
             if (string.IsNullOrWhiteSpace(task.Num + task.Title))
                 continue;
             Tasks.Add(task);
+            stringBuilder.AppendLine($"[{task.Status}]{task.Num} {task.Title}");
         }
+        var logger = LoggerFactory.CreateLogger("WesleyCode.Task");
+        logger.LogInformation(stringBuilder.ToString());
         return $"完成更新,共{Tasks.Count}条任务";
     }
 
-    [Description("获取任务清单")]
-    private static List<TaskItem> ReadTasks() => Tasks;
+    [Description("获取未开始任务清单")]
+    private static List<TaskItem> ReadTasks() => Tasks.Where(t => t.Status != "未开始").ToList();
 
     private static string DecodeCommandOutput(byte[] buffer)
     {
@@ -137,7 +138,6 @@ internal static class ToolManager
 
     private sealed record CommandItem(
         [Description("工具名称")] string FileName,
-        [Description("工具工作目录")] string? WorkPath = null,
         [Description("工具参数集合")] List<string>? Arguments = null,
         [Description("执行超时秒数,默认 60 秒,最大 600 秒")] int TimeoutSeconds = 60
     );
@@ -147,6 +147,6 @@ internal static class ToolManager
         [Description("任务标题")] string Title,
         [Description("任务详情")] string Content,
         [Description("执行结果")] string Result,
-        [Description("任务状态,只有: 未开始, 进行中, 已完成")] string Status = "未开始"
+        [Description("任务状态,只有: 未开始,进行中,已跳过,已完成")] string Status = "未开始"
     );
 }

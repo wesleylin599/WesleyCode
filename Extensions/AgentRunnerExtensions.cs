@@ -31,15 +31,15 @@ internal static class AgentRunnerExtensions
         return output.ToString();
     }
 
-    public static async void ConsoleLog(this IList<AIContent> contents)
+    public static async void ConsoleLog(this IList<AIContent> contents, string? target = null)
     {
         foreach (var content in contents)
         {
             if (content is FunctionCallContent callContent)
             {
                 Console.ForegroundColor = ConsoleColor.DarkYellow;
-                var arguments = callContent.Arguments?.Values ?? ["null"];
-                Console.WriteLine($"[{callContent.Name}] {string.Join(" ", arguments)}");
+                var arguments = callContent.Arguments is { Count: > 0 } ? callContent.Arguments.Values : ["null"];
+                Console.WriteLine($"[{target ?? "unknow"}:{callContent.Name}] {string.Join(" ", arguments)}");
             }
             else if (content is FunctionResultContent resultContent)
             {
@@ -59,7 +59,7 @@ internal static class AgentRunnerExtensions
             await foreach (var agentResponse in agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
             {
                 updates.Add(agentResponse);
-                agentResponse.Contents.ConsoleLog();
+                agentResponse.Contents.ConsoleLog(agent.Name);
             }
             response = updates.ToAgentResponse();
             if (!string.IsNullOrWhiteSpace(response.Text))

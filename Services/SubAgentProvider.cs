@@ -27,39 +27,18 @@ internal sealed class SubAgentProvider : AIContextProvider
         "规划代理,用于设计实现任务清单,使用示例`use_subAgent(planner,<需求>)`",
         """
         你是一个规划代理.设计实现任务清单.不要做更改.
-        要求:
         每个任务需要按顺序且可独立执行.
         任务的总数不要超过 10 条.
-        完成后更新完整任务清单.
-        只输出`已更新任务清单`.
         """,
-        [.. ToolManager.ReadFunctions, ToolManager.UpdateTasksFunction],
         new ReasoningOptions { Output = ReasoningOutput.Summary }
     );
     private static readonly AgentContent Executor = new(
         "executor",
-        "执行代理,用于执行任务清单中的任务,按清单中任务序号逐条执行,使用示例`use_subAgent(executor,<任务序号.任务标题>)`",
+        "执行代理,用于执行专注任务,使用示例`use_subAgent(executor,<任务描述>)`",
         """
-        你是一个执行代理.高效简洁地完成任务.
-        要求:
-        从任务队列中获取任务标题对应任务并完成它.
-        每次只执行一条任务,完成后更新任务清单.
-        只输出`已更新任务清单`.
+        你是一个执行代理.使用工具简洁高效地完成任务.
         """,
-        ToolManager.AllFunctions,
         new ReasoningOptions { Output = ReasoningOutput.Summary }
-    );
-    private static readonly AgentContent Reviewer = new(
-        "reviewer",
-        "审阅代理,用于对任务完成度进行评估,使用示例`use_subAgent(reviewer,<根据任务清单进行评估>)`",
-        """
-        你是一个审阅代理,评估任务完成度,不要做更改.
-        要求:
-        根据需求和执行结果完成评估.
-        输出评估结论.
-        """,
-        ToolManager.ReadFunctions,
-        new ReasoningOptions { Output = ReasoningOutput.Full }
     );
 
     private readonly AITool[] _tools;
@@ -71,7 +50,6 @@ internal sealed class SubAgentProvider : AIContextProvider
     {
         [Planner.Name] = Planner,
         [Executor.Name] = Executor,
-        [Reviewer.Name] = Reviewer,
     };
 
     public SubAgentProvider(IChatClient client, AIContextProvider[]? providers = null, ILoggerFactory? loggerFactory = null)
@@ -90,7 +68,7 @@ internal sealed class SubAgentProvider : AIContextProvider
         return ValueTask.FromResult(new AIContext { Instructions = instructionPrompt, Tools = _tools });
     }
 
-    private record AgentContent(string Name, string Description, string Instructions, AITool[] Tools, ReasoningOptions? Reasoning = null);
+    private record AgentContent(string Name, string Description, string Instructions, ReasoningOptions? Reasoning = null);
 
     private async Task<string> UseSubAgentAsync(
         [Description("子代理名称")] string name,
@@ -102,13 +80,6 @@ internal sealed class SubAgentProvider : AIContextProvider
         {
             return "Error: 未找到该子代理.";
         }
-
-        _logger.LogInformation(
-            $"""
-            {content.Name} request:
-            {input}
-            """
-        );
 
         var reasoning = content.Reasoning ?? new ReasoningOptions();
 
@@ -122,7 +93,7 @@ internal sealed class SubAgentProvider : AIContextProvider
                     Instructions = content.Instructions,
                     AllowMultipleToolCalls = true,
                     ToolMode = ChatToolMode.Auto,
-                    Tools = content.Tools,
+                    Tools = [ToolManager.CommandFunction],
                     Reasoning = reasoning,
                 },
                 AIContextProviders = _providers,
@@ -131,13 +102,6 @@ internal sealed class SubAgentProvider : AIContextProvider
         var session = await subAgent.CreateSessionAsync(cancellationToken);
 
         var response = await subAgent.ExecuteAsync(input, session, cancellationToken: cancellationToken);
-
-        _logger.LogInformation(
-            $"""
-            {content.Name} response:
-            {response.Text}
-            """
-        );
 
         return string.IsNullOrWhiteSpace(response.Text) ? "Error:未获取到输出结果" : response.Text;
     }
@@ -150,15 +114,6 @@ internal sealed class SubAgentProvider : AIContextProvider
             sb.AppendLine("  <agent>");
             sb.AppendLine($"    <name>{SecurityElement.Escape(agentContent.Name)}</name>");
             sb.AppendLine($"    <description>{SecurityElement.Escape(agentContent.Description)}</description>");
-            sb.AppendLine("    <tools>");
-            foreach (var tool in agentContent.Tools)
-            {
-                sb.AppendLine("        <tool>");
-                sb.AppendLine($"            <name>{SecurityElement.Escape(tool.Name)}</name>");
-                sb.AppendLine($"            <description>{SecurityElement.Escape(tool.Description)}</description>");
-                sb.AppendLine("        </tool>");
-            }
-            sb.AppendLine("    </tools>");
             sb.AppendLine("  </agent>");
             _logger.LogInformation("Loaded subAgent: {SubAgentName}", agentContent.Name);
         }

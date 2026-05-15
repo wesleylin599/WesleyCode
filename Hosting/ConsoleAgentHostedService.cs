@@ -12,16 +12,17 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
 {
     private readonly AIAgent _agentRunner;
     private readonly ISessionStore _sessionStore;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<ConsoleAgentHostedService> _logger;
     private readonly SessionOptions _sessionOptions;
     private DateTimeOffset _lastSavedAt;
-    private AgentSession? _session;
     private bool _sessionDirty;
 
     public ConsoleAgentHostedService(
         AIAgent agentRunner,
         ISessionStore sessionStore,
+        ILoggerFactory loggerFactory,
         IHostApplicationLifetime lifetime,
         IOptions<SessionOptions> sessionOptions,
         ILogger<ConsoleAgentHostedService> logger
@@ -29,6 +30,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     {
         _agentRunner = agentRunner;
         _sessionStore = sessionStore;
+        _loggerFactory = loggerFactory;
         _lifetime = lifetime;
         _sessionOptions = sessionOptions.Value;
         _logger = logger;
@@ -45,13 +47,11 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 await startedTcs.Task.WaitAsync(stoppingToken);
             }
 
-            _session = await _sessionStore.LoadAsync(stoppingToken);
+            ToolManager.LoggerFactory = _loggerFactory;
             _lastSavedAt = DateTimeOffset.UtcNow;
             _sessionDirty = false;
-            PrintHistory(_session);
             await RunLoopAsync(stoppingToken);
         }
-        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Console loop failed.");
@@ -60,15 +60,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         {
             _lifetime.StopApplication();
         }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_session != null)
-        {
-            await SafeSaveAsync(_session, cancellationToken, force: true);
-        }
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task SafeSaveAsync(AgentSession session, CancellationToken cancellationToken, bool force)
@@ -91,25 +82,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         {
             _logger.LogWarning(ex, "Failed to persist session.");
         }
-    }
-
-    private async Task<bool> TryHandleCommandAsync(string input, CancellationToken cancellationToken)
-    {
-        if (string.Equals(input, "/reset", StringComparison.OrdinalIgnoreCase) || string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
-        {
-            if (string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
-            {
-                Console.Clear();
-            }
-
-            await _sessionStore.ClearAsync(cancellationToken);
-            _session = await _agentRunner.CreateSessionAsync(cancellationToken);
-            MarkSessionDirty();
-            _logger.LogInformation("> System: 会话已重置。");
-            return true;
-        }
-
-        return false;
     }
 
     private async Task CancelAgentAsync(CancellationTokenSource source)
@@ -138,6 +110,8 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
 
     private async Task RunLoopAsync(CancellationToken stoppingToken)
     {
+        var session = await _sessionStore.LoadAsync(stoppingToken);
+        PrintHistory(session);
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -161,8 +135,13 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     break;
                 }
 
-                if (await TryHandleCommandAsync(input, stoppingToken))
+                if (string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
                 {
+                    Console.Clear();
+                    await _sessionStore.ClearAsync(stoppingToken);
+                    MarkSessionDirty();
+                    _logger.LogInformation("> System: 会话已重置。");
+                    session = await _agentRunner.CreateSessionAsync(stoppingToken);
                     continue;
                 }
 
@@ -171,7 +150,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 try
                 {
                     var stopwatch = Stopwatch.StartNew();
-                    var response = await _agentRunner.ExecuteAsync(input, _session!, source.Token);
+                    var response = await _agentRunner.ExecuteAsync(input, session, source.Token);
                     stopwatch.Stop();
                     Console.WriteLine($"> Agent: {response.Text}");
                     _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
@@ -187,20 +166,13 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     await cancelTask;
                 }
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
             catch (Exception ex)
             {
                 Console.WriteLine($"> Agent: {ex.Message}");
             }
             finally
             {
-                if (_session != null)
-                {
-                    await SafeSaveAsync(_session, stoppingToken, force: false);
-                }
+                await SafeSaveAsync(session, stoppingToken, force: false);
                 Console.ResetColor();
             }
         }
@@ -214,7 +186,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             {
                 if (string.IsNullOrEmpty(message.Text))
                 {
-                    message.Contents.ConsoleLog();
+                    message.Contents.ConsoleLog(_agentRunner.Name);
                 }
                 else if (message.Role == ChatRole.User)
                 {

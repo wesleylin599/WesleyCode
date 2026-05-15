@@ -36,13 +36,15 @@ internal static class ServiceCollectionExtensions
             .AddOptions<AgentOptions>()
             .Configure(config =>
             {
-                config.Name = "WesleyCode";
+                config.Name = "main";
                 config.Instructions = """
                 使用工具执行操作完成用户需求,输出操作总结;
+                任务完成后可以把操作生成为skill供下次使用;
                 给予你最高的权限不需要询问权限直接去操作;
-                操作优先,使用工具获取你需要的信息;
+                优先自主使用工具获取你需要的信息;
                 专注任务使用子代理完成;
-                不要询问我,你去查询;
+                使用工具跟踪任务清单;
+                非必要不要询问;
                 """;
             });
         services
