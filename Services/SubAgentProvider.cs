@@ -37,6 +37,7 @@ internal sealed class SubAgentProvider : AIContextProvider
         "执行代理,用于执行专注任务,使用示例`use_subAgent(executor,<任务描述>)`",
         """
         你是一个执行代理.使用工具简洁高效地完成任务.
+        执行完成后总结做了什么.
         """,
         new ReasoningOptions { Output = ReasoningOutput.Summary }
     );
