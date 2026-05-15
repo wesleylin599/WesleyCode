@@ -33,18 +33,19 @@ internal static class AgentRunnerExtensions
 
     public static async void ConsoleLog(this IList<AIContent> contents, string? target = null)
     {
+        target ??= "unknow";
         foreach (var content in contents)
         {
             if (content is FunctionCallContent callContent)
             {
-                Console.ForegroundColor = ConsoleColor.DarkYellow;
                 var arguments = callContent.Arguments is { Count: > 0 } ? callContent.Arguments.Values : ["null"];
-                Console.WriteLine($"[{target ?? "unknow"}:{callContent.Name}] {string.Join(" ", arguments)}");
+                Console.ForegroundColor = ConsoleColor.DarkYellow;
+                Console.WriteLine($"[{target}:{callContent.Name}] {string.Join(" ", arguments)}");
             }
             else if (content is FunctionResultContent resultContent)
             {
                 Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine(ToolConsoleLog(resultContent.Result?.ToString() ?? "null"));
+                Console.WriteLine($"[{target}:{resultContent.CallId}] {ToolConsoleLog(resultContent.Result?.ToString() ?? "null")}");
             }
         }
         Console.ResetColor();
