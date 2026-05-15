@@ -34,9 +34,10 @@ internal sealed class SubAgentProvider : AIContextProvider
     );
     private static readonly AgentContent Executor = new(
         "executor",
-        "执行代理,用于执行专注任务,使用示例`use_subAgent(executor,<任务描述>)`",
+        "执行代理,用于完成专注任务,使用示例`use_subAgent(executor,<任务描述>)`",
         """
-        你是一个执行代理.使用工具简洁高效地完成任务.
+        你是一个执行代理,使用工具简洁高效地完成任务
+        必要时获取skills中的工具使用,并且合理调用工具完成任务.
         执行完成后总结做了什么.
         """,
         new ReasoningOptions { Output = ReasoningOutput.Summary }
@@ -81,8 +82,6 @@ internal sealed class SubAgentProvider : AIContextProvider
         {
             return "Error: 未找到该子代理.";
         }
-
-        _logger.LogInformation($"{content.Name} request...");
 
         var reasoning = content.Reasoning ?? new ReasoningOptions();
         AIAgent subAgent = _client.AsAIAgent(
