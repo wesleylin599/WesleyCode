@@ -53,8 +53,8 @@ internal static class AgentRunnerExtensions
 
     public static async Task<AgentResponse> ExecuteAsync(this AIAgent agent, string input, AgentSession session, CancellationToken cancellationToken)
     {
+        AgentResponse response;
         var updates = new List<AgentResponseUpdate>();
-        var response = new AgentResponse(new ChatMessage(ChatRole.User, input));
         for (var attempt = 0; attempt < MaxEmptyResponseRetries; attempt++)
         {
             await foreach (var agentResponse in agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))

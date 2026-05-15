@@ -82,8 +82,9 @@ internal sealed class SubAgentProvider : AIContextProvider
             return "Error: 未找到该子代理.";
         }
 
-        var reasoning = content.Reasoning ?? new ReasoningOptions();
+        _logger.LogInformation($"{content.Name} request...");
 
+        var reasoning = content.Reasoning ?? new ReasoningOptions();
         AIAgent subAgent = _client.AsAIAgent(
             options: new ChatClientAgentOptions
             {
@@ -103,6 +104,8 @@ internal sealed class SubAgentProvider : AIContextProvider
         var session = await subAgent.CreateSessionAsync(cancellationToken);
 
         var response = await subAgent.ExecuteAsync(input, session, cancellationToken: cancellationToken);
+
+        _logger.LogInformation($"{content.Name} response...");
 
         return string.IsNullOrWhiteSpace(response.Text) ? "Error:未获取到输出结果" : response.Text;
     }
