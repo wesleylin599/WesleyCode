@@ -45,7 +45,7 @@ internal static class AgentRunnerExtensions
             else if (content is FunctionResultContent resultContent)
             {
                 Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine($"[{target}:{resultContent.CallId}] {ToolConsoleLog(resultContent.Result?.ToString() ?? "null")}");
+                Console.WriteLine(ToolConsoleLog(resultContent.Result?.ToString() ?? "null"));
             }
         }
         Console.ResetColor();
