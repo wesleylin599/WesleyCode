@@ -31,7 +31,7 @@ internal static class AgentRunnerExtensions
         return output.ToString();
     }
 
-    public static async void ConsoleLog(this IList<AIContent> contents, string? target = null)
+    public static void ConsoleLog(this IList<AIContent> contents, string? target = null)
     {
         target ??= "unknow";
         foreach (var content in contents)
@@ -53,16 +53,15 @@ internal static class AgentRunnerExtensions
 
     public static async Task<AgentResponse> ExecuteAsync(this AIAgent agent, string input, AgentSession session, CancellationToken cancellationToken)
     {
-        AgentResponse response;
-        var updates = new List<AgentResponseUpdate>();
         for (var attempt = 0; attempt < MaxEmptyResponseRetries; attempt++)
         {
+            var updates = new List<AgentResponseUpdate>();
             await foreach (var agentResponse in agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
             {
                 updates.Add(agentResponse);
                 agentResponse.Contents.ConsoleLog(agent.Name);
             }
-            response = updates.ToAgentResponse();
+            AgentResponse response = updates.ToAgentResponse();
             if (!string.IsNullOrWhiteSpace(response.Text))
             {
                 return response;

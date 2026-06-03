@@ -168,7 +168,8 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"> Agent: {ex.Message}");
+                _logger.LogError(ex, "Agent execution failed.");
+                Console.WriteLine("> Agent: 执行失败，请查看日志获取详细信息。");
             }
             finally
             {

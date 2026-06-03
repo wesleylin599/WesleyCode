@@ -1,6 +1,7 @@
 ﻿using System.ClientModel.Primitives;
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace WesleyCode.Infrastructure;
 
@@ -9,14 +10,13 @@ internal class LoggingAuthPolicy : PipelinePolicy
 {
     private readonly bool _logRequestBody;
     private readonly bool _logResponseBody;
+    private readonly ILogger<LoggingAuthPolicy> _logger;
 
-    public LoggingAuthPolicy()
-        : this(logRequestBody: false, logResponseBody: false) { }
-
-    public LoggingAuthPolicy(bool logRequestBody, bool logResponseBody)
+    public LoggingAuthPolicy(bool logRequestBody, bool logResponseBody, ILoggerFactory? loggerFactory = null)
     {
         _logRequestBody = logRequestBody;
         _logResponseBody = logResponseBody;
+        _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<LoggingAuthPolicy>();
     }
 
     public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
@@ -41,8 +41,12 @@ internal class LoggingAuthPolicy : PipelinePolicy
     {
         var request = message.Request;
 
-        Console.WriteLine($"URL: {request.Uri}");
-        Console.WriteLine($"Method: {request.Method}");
+        _logger.LogInformation(
+            $"""
+            URL: {request.Uri}
+            Method: {request.Method}
+            """
+        );
 
         if (request.Content != null)
         {
@@ -50,9 +54,12 @@ internal class LoggingAuthPolicy : PipelinePolicy
             request.Content.WriteTo(ms);
             var body = Encoding.UTF8.GetString(ms.ToArray());
 
-            Console.WriteLine("Request Body:");
-            Console.WriteLine(body);
-            Console.WriteLine();
+            _logger.LogInformation(
+                $"""
+                Request Body:
+                {body}
+                """
+            );
         }
     }
 
@@ -60,8 +67,12 @@ internal class LoggingAuthPolicy : PipelinePolicy
     {
         var request = message.Request;
 
-        Console.WriteLine($"URL: {request.Uri}");
-        Console.WriteLine($"Method: {request.Method}");
+        _logger.LogInformation(
+            $"""
+            URL: {request.Uri}
+            Method: {request.Method}
+            """
+        );
 
         if (request.Content != null)
         {
@@ -69,9 +80,12 @@ internal class LoggingAuthPolicy : PipelinePolicy
             await request.Content.WriteToAsync(ms);
             var body = Encoding.UTF8.GetString(ms.ToArray());
 
-            Console.WriteLine("Request Body:");
-            Console.WriteLine(body);
-            Console.WriteLine();
+            _logger.LogInformation(
+                $"""
+                Request Body:
+                {body}
+                """
+            );
         }
     }
 
@@ -82,8 +96,9 @@ internal class LoggingAuthPolicy : PipelinePolicy
             using var ms = new MemoryStream();
             message.Response.ContentStream.CopyTo(ms);
             var body = Encoding.UTF8.GetString(ms.ToArray());
-            var preview = body.Length <= 2048 ? body : body[..2048];
-            throw new HttpRequestException($"HTTP error response body (preview): {preview}");
+            var preview = CreateSafePreview(body);
+            message.Response.ContentStream.Position = 0;
+            _logger.LogWarning("HTTP error response body (preview): {Preview}", preview);
         }
     }
 
@@ -94,8 +109,21 @@ internal class LoggingAuthPolicy : PipelinePolicy
             using var ms = new MemoryStream();
             await message.Response.ContentStream.CopyToAsync(ms);
             var body = Encoding.UTF8.GetString(ms.ToArray());
-            var preview = body.Length <= 2048 ? body : body[..2048];
-            throw new HttpRequestException($"HTTP error response body (preview): {preview}");
+            var preview = CreateSafePreview(body);
+            message.Response.ContentStream.Position = 0;
+            _logger.LogWarning("HTTP error response body (preview): {Preview}", preview);
         }
+    }
+
+    private static string CreateSafePreview(string body)
+    {
+        const int maxLength = 512;
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return "(empty)";
+        }
+
+        var compact = body.Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
+        return compact.Length <= maxLength ? compact : $"{compact[..maxLength]}{{truncated}}";
     }
 }

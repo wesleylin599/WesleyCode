@@ -83,7 +83,7 @@ internal static class ToolManager
     }
 
     [Description("获取未开始任务清单")]
-    private static List<TaskItem> ReadTasks() => Tasks.Where(t => t.Status != "未开始").ToList();
+    private static List<TaskItem> ReadTasks() => Tasks.Where(t => t.Status == "未开始").ToList();
 
     private static string DecodeCommandOutput(byte[] buffer)
     {

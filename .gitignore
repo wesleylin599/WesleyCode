@@ -361,3 +361,12 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Local runtime data
+session/
+work/
+deliverables/
+_tmp/
+_work/
+#_work/
+# Local agent and tool outputs
+artifacts/

@@ -28,7 +28,7 @@ internal static class ServiceCollectionExtensions
             .AddOptions<OpenAiOptions>()
             .Configure(config =>
             {
-                config.ModelId = configuration.GetValue<string>("WINTEAM_MODELID") ?? "gpt-5.2";
+                config.ModelId = configuration.GetValue<string>("WINTEAM_MODELID") ?? "gpt-5.4";
                 config.BaseUrl = configuration.GetValue<string>("WINTEAM_BASEURL") ?? string.Empty;
                 config.ApiKey = configuration.GetValue<string>("WINTEAM_APIKEY") ?? string.Empty;
             });
@@ -69,10 +69,13 @@ internal static class ServiceCollectionExtensions
                 config.DirectoryName = "session";
             });
 
-        services.AddSingleton<CrsChatClient>(provider =>
+        services.AddSingleton<IChatClient>(provider =>
         {
+            var cache = provider.GetRequiredService<IDistributedCache>();
+            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var logger = provider.GetRequiredService<ILogger<OpenAiOptions>>();
             var options = provider.GetRequiredService<IOptions<OpenAiOptions>>().Value;
+
             if (string.IsNullOrWhiteSpace(options.ApiKey))
             {
                 throw new InvalidOperationException("未配置 OpenAI API Key，请设置 WINTEAM_APIKEY。");
@@ -81,7 +84,7 @@ internal static class ServiceCollectionExtensions
             logger.LogInformation("BaseUrl:{BaseUrl}", string.IsNullOrWhiteSpace(options.BaseUrl) ? "(default)" : options.BaseUrl);
             logger.LogInformation("ModelId:{ModelId}", options.ModelId);
 
-            var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, true) };
+            var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, true, loggerFactory) };
             if (!string.IsNullOrWhiteSpace(options.BaseUrl))
             {
                 if (!Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var endpoint))
@@ -92,17 +95,14 @@ internal static class ServiceCollectionExtensions
                 clientOptions.Endpoint = endpoint;
             }
 
-            var client = new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions);
-            var baseClient = client.GetResponsesClient().AsIChatClient(options.ModelId);
-            return CrsChatClient.Create(baseClient);
-        });
-
-        services.AddSingleton<IChatClient>(provider =>
-        {
-            var crsClient = provider.GetRequiredService<CrsChatClient>();
-            var cache = provider.GetRequiredService<IDistributedCache>();
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            return crsClient.AsBuilder().UseDistributedCache(cache).UseLogging(loggerFactory).Build();
+            var chatClient = new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions)
+                .GetResponsesClient()
+                .AsIChatClient(options.ModelId)
+                .AsBuilder()
+                .UseDistributedCache(cache)
+                .UseLogging(loggerFactory)
+                .Build();
+            return CrsChatClient.Create(chatClient);
         });
 
         services.AddSingleton<IDistributedCache>(provider =>
@@ -119,7 +119,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<CompactionProvider>(provider =>
         {
             var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
-            var crsClient = provider.GetRequiredService<CrsChatClient>();
+            var crsClient = provider.GetRequiredService<IChatClient>();
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var pipeline = new PipelineCompactionStrategy(
                 new ToolResultCompactionStrategy(CompactionTriggers.TokensExceed(compactionOptions.ToolResultTokenLimit)),
@@ -176,7 +176,7 @@ internal static class ServiceCollectionExtensions
 
         services.AddSingleton<SubAgentProvider>(provider =>
         {
-            var crsClient = provider.GetRequiredService<CrsChatClient>();
+            var crsClient = provider.GetRequiredService<IChatClient>();
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var compactionProvider = provider.GetRequiredService<CompactionProvider>();
             var promptProvider = provider.GetRequiredService<SystemPromptProvider>();
