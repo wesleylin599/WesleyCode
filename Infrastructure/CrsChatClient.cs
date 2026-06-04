@@ -25,6 +25,10 @@ public sealed class CrsChatClient : DelegatingChatClient
     {
         options ??= new ChatOptions();
         List<ChatMessage> request = [];
+        if (!string.IsNullOrWhiteSpace(options.Instructions))
+        {
+            request.Add(new ChatMessage(ChatRole.User, options.Instructions));
+        }
         foreach (var message in messages)
         {
             if (message.Role == ChatRole.System)

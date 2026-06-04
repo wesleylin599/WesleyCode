@@ -65,7 +65,7 @@ internal sealed class SubAgentProvider : AIContextProvider
 
     protected override ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Successfully loaded {AgentCount} subAgent", _agents.Count);
+        _logger.LogDebug("Successfully loaded {AgentCount} subAgent", _agents.Count);
         var instructionPrompt = string.Format(DefaultInstructionPrompt, _agentPrompt);
         return ValueTask.FromResult(new AIContext { Instructions = instructionPrompt, Tools = _tools });
     }
@@ -104,7 +104,7 @@ internal sealed class SubAgentProvider : AIContextProvider
 
         var response = await subAgent.ExecuteAsync(input, session, cancellationToken: cancellationToken);
 
-        _logger.LogInformation($"{content.Name} response...");
+        _logger.LogDebug($"{content.Name} response...");
 
         return string.IsNullOrWhiteSpace(response.Text) ? "Error:未获取到输出结果" : response.Text;
     }

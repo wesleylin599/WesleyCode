@@ -12,7 +12,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
 {
     private readonly AIAgent _agentRunner;
     private readonly ISessionStore _sessionStore;
-    private readonly ILoggerFactory _loggerFactory;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<ConsoleAgentHostedService> _logger;
     private readonly SessionOptions _sessionOptions;
@@ -22,7 +21,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     public ConsoleAgentHostedService(
         AIAgent agentRunner,
         ISessionStore sessionStore,
-        ILoggerFactory loggerFactory,
         IHostApplicationLifetime lifetime,
         IOptions<SessionOptions> sessionOptions,
         ILogger<ConsoleAgentHostedService> logger
@@ -30,7 +28,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     {
         _agentRunner = agentRunner;
         _sessionStore = sessionStore;
-        _loggerFactory = loggerFactory;
         _lifetime = lifetime;
         _sessionOptions = sessionOptions.Value;
         _logger = logger;
@@ -47,7 +44,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 await startedTcs.Task.WaitAsync(stoppingToken);
             }
 
-            ToolManager.LoggerFactory = _loggerFactory;
             _lastSavedAt = DateTimeOffset.UtcNow;
             _sessionDirty = false;
             await RunLoopAsync(stoppingToken);
@@ -76,7 +72,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             stopwatch.Stop();
             _lastSavedAt = DateTimeOffset.UtcNow;
             _sessionDirty = false;
-            _logger.LogInformation("Session persisted in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
+            _logger.LogDebug("Session persisted in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
@@ -95,7 +91,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     var key = Console.ReadKey(intercept: true);
                     if (key.Key == ConsoleKey.Escape)
                     {
-                        _logger.LogInformation("Cancel key received; stopping agent execution.");
+                        _logger.LogInformation("收到取消指令，正在停止当前执行。");
                         source.Cancel();
                     }
                 }
@@ -117,7 +113,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             try
             {
                 await Task.Delay(100, stoppingToken);
-                Console.Write("> User : ");
+                ConsoleOutput.WritePrompt();
                 var input = Console.ReadLine();
                 if (input is null)
                 {
@@ -140,7 +136,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     Console.Clear();
                     await _sessionStore.ClearAsync(stoppingToken);
                     MarkSessionDirty();
-                    _logger.LogInformation("> System: 会话已重置。");
+                    ConsoleOutput.WriteSystemMessage("会话已重置。");
                     session = await _agentRunner.CreateSessionAsync(stoppingToken);
                     continue;
                 }
@@ -152,13 +148,13 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     var stopwatch = Stopwatch.StartNew();
                     var response = await _agentRunner.ExecuteAsync(input, session, source.Token);
                     stopwatch.Stop();
-                    Console.WriteLine($"> Agent: {response.Text}");
+                    ConsoleOutput.WriteAgentMessage(response.Text);
                     _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
                     MarkSessionDirty();
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)
                 {
-                    Console.WriteLine("> System: 已取消当前代理执行。");
+                    ConsoleOutput.WriteSystemMessage("已取消当前代理执行。");
                 }
                 finally
                 {
@@ -169,7 +165,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Agent execution failed.");
-                Console.WriteLine("> Agent: 执行失败，请查看日志获取详细信息。");
+                ConsoleOutput.WriteSystemMessage("执行失败，请查看日志获取详细信息。");
             }
             finally
             {
@@ -191,11 +187,11 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 }
                 else if (message.Role == ChatRole.User)
                 {
-                    Console.WriteLine($"> User : {message.Text}");
+                    ConsoleOutput.WriteUserMessage(message.Text);
                 }
                 else if (message.Role == ChatRole.Assistant)
                 {
-                    Console.WriteLine($"> Agent: {message.Text}");
+                    ConsoleOutput.WriteAgentMessage(message.Text);
                 }
             }
         }

@@ -11,7 +11,6 @@ internal sealed class SystemPromptProvider : AIContextProvider
 
     private readonly string _workDirectory;
     private readonly ILogger<SystemPromptProvider> _logger;
-    private readonly SemaphoreSlim _promptLock = new(1, 1);
     private string? _agentPrompt;
 
     public SystemPromptProvider(string workDirectory, ILoggerFactory? loggerFactory = null)
@@ -27,15 +26,7 @@ internal sealed class SystemPromptProvider : AIContextProvider
             return new AIContext { Instructions = _agentPrompt };
         }
 
-        await _promptLock.WaitAsync(cancellationToken);
-        try
-        {
-            _agentPrompt ??= await BuildPromptAsync(cancellationToken);
-        }
-        finally
-        {
-            _promptLock.Release();
-        }
+        _agentPrompt ??= await BuildPromptAsync(cancellationToken);
 
         return new AIContext { Instructions = _agentPrompt };
     }
@@ -43,12 +34,12 @@ internal sealed class SystemPromptProvider : AIContextProvider
     private async Task<string> BuildPromptAsync(CancellationToken cancellationToken = default)
     {
         var builder = new StringBuilder();
-        builder.AppendLine($"你是位于 {_workDirectory} 的代理工具,使用中文输出;");
+        builder.AppendLine($"你是位于\"{_workDirectory}\"的代理工具,使用中文输出;");
         builder.AppendLine("操作时要求简洁高效,最小改动实现需求;");
 
         foreach (var path in EnumeratePromptFiles())
         {
-            _logger.LogInformation("加载`{PromptPath}`", path);
+            _logger.LogDebug("加载提示词文件 `{PromptPath}`", path);
             var prompt = await File.ReadAllTextAsync(path, cancellationToken);
             if (string.IsNullOrWhiteSpace(prompt))
             {

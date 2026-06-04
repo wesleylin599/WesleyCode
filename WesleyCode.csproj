@@ -7,9 +7,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="CliWrap" Version="3.10.1" />
+        <PackageReference Include="CliWrap" Version="3.10.2" />
         <PackageReference Include="DiffPlex" Version="1.9.0" />
-        <PackageReference Include="Microsoft.Agents.AI" Version="1.8.0" />
+        <PackageReference Include="Microsoft.Agents.AI" Version="1.9.0" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
         <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
         <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.8" />

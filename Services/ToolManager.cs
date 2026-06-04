@@ -2,13 +2,11 @@
 using System.Text;
 using CliWrap;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace WesleyCode.Services;
 
 internal static class ToolManager
 {
-    private const int MaxLogLength = 30000;
     private static readonly List<TaskItem> Tasks = [];
     private static readonly UTF8Encoding Utf8StrictEncoding = new(false, true);
 
@@ -16,8 +14,6 @@ internal static class ToolManager
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
-
-    public static ILoggerFactory LoggerFactory = NullLoggerFactory.Instance;
 
     public static readonly AITool CommandFunction = AIFunctionFactory.Create(Command);
     public static readonly AITool ReadTasksFunction = AIFunctionFactory.Create(ReadTasks);
@@ -55,14 +51,14 @@ internal static class ToolManager
             var standardOutput = DecodeCommandOutput(standardOutputStream.ToArray());
             var standardError = DecodeCommandOutput(standardErrorStream.ToArray());
 
-            output = $"[{result.ExitCode}]{standardOutput}{standardError}";
+            output = FormatCommandResult(result.ExitCode, standardOutput, standardError);
         }
         catch (Exception ex)
         {
             output = ex.Message;
         }
 
-        return ToolResult(output);
+        return output;
     }
 
     [Description("更新任务清单,调用需要传入完整的工作清单")]
@@ -70,6 +66,7 @@ internal static class ToolManager
     {
         Tasks.Clear();
         StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.AppendLine($"任务清单已更新,共 {Tasks.Count} 条任务");
         foreach (var task in tasks ?? [])
         {
             if (string.IsNullOrWhiteSpace(task.Num + task.Title))
@@ -77,13 +74,11 @@ internal static class ToolManager
             Tasks.Add(task);
             stringBuilder.AppendLine($"[{task.Status}]{task.Num} {task.Title}");
         }
-        var logger = LoggerFactory.CreateLogger("WesleyCode.Task");
-        logger.LogInformation(stringBuilder.ToString());
-        return $"完成更新,共{Tasks.Count}条任务";
+        return stringBuilder.ToString();
     }
 
-    [Description("获取未开始任务清单")]
-    private static List<TaskItem> ReadTasks() => Tasks.Where(t => t.Status == "未开始").ToList();
+    [Description("获取一条未开始的任务")]
+    private static TaskItem? ReadTasks() => Tasks.Where(t => t.Status == "未开始").OrderBy(x => x.Num).FirstOrDefault();
 
     private static string DecodeCommandOutput(byte[] buffer)
     {
@@ -133,8 +128,30 @@ internal static class ToolManager
         }
     }
 
-    private static string ToolResult(string args) =>
-        args.Length > MaxLogLength ? $"{args[..(MaxLogLength / 2)]} {{truncated}} {args[(MaxLogLength / 2)..]}" : args;
+    private static string FormatCommandResult(int exitCode, string standardOutput, string standardError)
+    {
+        var output = new StringBuilder();
+        output.Append("exit_code: ").AppendLine(exitCode.ToString());
+
+        if (!string.IsNullOrWhiteSpace(standardOutput))
+        {
+            output.AppendLine("stdout:");
+            output.AppendLine(standardOutput.TrimEnd());
+        }
+
+        if (!string.IsNullOrWhiteSpace(standardError))
+        {
+            output.AppendLine("stderr:");
+            output.AppendLine(standardError.TrimEnd());
+        }
+
+        if (string.IsNullOrWhiteSpace(standardOutput) && string.IsNullOrWhiteSpace(standardError))
+        {
+            output.AppendLine("(no output)");
+        }
+
+        return output.ToString().TrimEnd();
+    }
 
     private sealed record CommandItem(
         [Description("工具名称")] string FileName,
@@ -143,7 +160,7 @@ internal static class ToolManager
     );
 
     private sealed record TaskItem(
-        [Description("任务序号")] string Num,
+        [Description("任务序号")] int Num,
         [Description("任务标题")] string Title,
         [Description("任务详情")] string Content,
         [Description("执行结果")] string Result,
