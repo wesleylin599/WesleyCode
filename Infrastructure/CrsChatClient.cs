@@ -30,16 +30,11 @@ public sealed class CrsChatClient : DelegatingChatClient
         }
         foreach (var message in messages)
         {
-            if (message.Role == ChatRole.System)
+            if (message.Role == ChatRole.System && !string.IsNullOrWhiteSpace(message.Text))
             {
-                if (!string.IsNullOrWhiteSpace(message.Text))
-                {
-                    request.Add(new ChatMessage(ChatRole.User, message.Text));
-                }
-
+                request.Add(new ChatMessage(ChatRole.User, message.Text));
                 continue;
             }
-
             request.Add(message);
         }
 

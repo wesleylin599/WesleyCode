@@ -45,7 +45,8 @@ internal static class ToolManager
                 .WithArguments(arguments)
                 .WithWorkingDirectory(Directory.GetCurrentDirectory())
                 .WithStandardOutputPipe(PipeTarget.ToStream(standardOutputStream))
-                .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream));
+                .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream))
+                .WithValidation(CommandResultValidation.None);
 
             var result = await cli.ExecuteAsync(timeoutSource.Token);
             var standardOutput = DecodeCommandOutput(standardOutputStream.ToArray());

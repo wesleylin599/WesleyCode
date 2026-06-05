@@ -13,9 +13,9 @@ internal static class ConsoleOutput
 
     public static void WriteUserMessage(string message) => WriteBlock("User", message, ConsoleColor.Cyan, ConsoleColor.Gray);
 
-    public static void WriteAgentMessage(string message) => WriteBlock("Agent", message, ConsoleColor.DarkGreen, ConsoleColor.Gray);
+    public static void WriteAgentMessage(string message) => WriteBlock("Agent", message, ConsoleColor.Green, ConsoleColor.Gray);
 
-    public static void WriteSystemMessage(string message) => WriteBlock("System", message, ConsoleColor.DarkMagenta, ConsoleColor.Gray);
+    public static void WriteSystemMessage(string message) => WriteBlock("System", message, ConsoleColor.Magenta, ConsoleColor.Gray);
 
     public static void WriteToolResult(string callId, string message) =>
         WriteBlock($"[{callId}] Tool", message, ConsoleColor.DarkBlue, ConsoleColor.DarkGray);

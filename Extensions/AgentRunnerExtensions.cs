@@ -10,8 +10,10 @@ internal static class AgentRunnerExtensions
     private const int MaxLogLine = 10;
     private const int MaxEmptyResponseRetries = 8;
 
-    private static string ToolConsoleLog(string args)
+    private static string ToolConsoleLog(string? args)
     {
+        if (string.IsNullOrEmpty(args))
+            return "null";
         bool isTruncated = false;
         var output = new StringBuilder();
         var lines = args.Split(["\r\n", "\n"], StringSplitOptions.None).Where(item => !string.IsNullOrEmpty(item)).ToList();
@@ -47,7 +49,7 @@ internal static class AgentRunnerExtensions
             }
             else if (content is FunctionResultContent resultContent)
             {
-                ConsoleOutput.WriteToolResult(resultContent.CallId, ToolConsoleLog(resultContent.Result?.ToString() ?? "null"));
+                ConsoleOutput.WriteToolResult(resultContent.CallId, ToolConsoleLog(resultContent.Result?.ToString()));
             }
         }
     }
