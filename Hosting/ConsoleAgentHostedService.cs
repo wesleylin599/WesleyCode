@@ -50,7 +50,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Console loop failed.");
+            _logger.LogEventId(ex.Message);
         }
         finally
         {
@@ -76,7 +76,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to persist session.");
+            _logger.LogWarning(ex.Message, "Failed to persist session.");
         }
     }
 
@@ -164,7 +164,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Agent execution failed.");
+                _logger.LogEventId(ex.Message);
                 ConsoleOutput.WriteSystemMessage("执行失败，请查看日志获取详细信息。");
             }
             finally

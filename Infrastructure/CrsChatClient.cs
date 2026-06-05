@@ -6,7 +6,7 @@ namespace WesleyCode.Infrastructure;
 [DebuggerStepThrough]
 public sealed class CrsChatClient : DelegatingChatClient
 {
-    public static CrsChatClient Create(IChatClient innerClient) => new CrsChatClient(innerClient);
+    public static CrsChatClient Create(IChatClient innerClient) => new(innerClient);
 
     public CrsChatClient(IChatClient innerClient)
         : base(innerClient) { }
@@ -23,9 +23,8 @@ public sealed class CrsChatClient : DelegatingChatClient
         CancellationToken cancellationToken = default
     )
     {
-        options ??= new ChatOptions();
         List<ChatMessage> request = [];
-        if (!string.IsNullOrWhiteSpace(options.Instructions))
+        if (!string.IsNullOrWhiteSpace(options?.Instructions))
         {
             request.Add(new ChatMessage(ChatRole.User, options.Instructions));
         }

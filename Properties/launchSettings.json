@@ -1,0 +1,10 @@
+﻿{
+    "profiles": {
+        "WesleyCode": {
+            "commandName": "Project",
+            "environmentVariables": {
+                "DOTNET_ENVIRONMENT": "local"
+            }
+        }
+    }
+}

@@ -28,9 +28,9 @@ internal static class ServiceCollectionExtensions
             .AddOptions<OpenAiOptions>()
             .Configure(config =>
             {
-                config.ModelId = configuration.GetValue<string>("WINTEAM_MODELID") ?? "gpt-5.4";
-                config.BaseUrl = configuration.GetValue<string>("WINTEAM_BASEURL") ?? string.Empty;
-                config.ApiKey = configuration.GetValue<string>("WINTEAM_APIKEY") ?? string.Empty;
+                config.ModelId = configuration.GetValue<string>("WINTEAM_MODELID");
+                config.BaseUrl = configuration.GetValue<string>("WINTEAM_BASEURL");
+                config.ApiKey = configuration.GetValue<string>("WINTEAM_APIKEY");
             });
         services
             .AddOptions<AgentOptions>()
@@ -38,7 +38,7 @@ internal static class ServiceCollectionExtensions
             {
                 config.Name = "main";
                 config.Instructions = """
-                使用工具执行操作完成用户需求,输出操作总结;
+                使用工具执行操作完成用户需求;
                 专注任务使用子代理完成;
                 使用工具跟踪任务清单;
                 """;
@@ -71,16 +71,18 @@ internal static class ServiceCollectionExtensions
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var logger = provider.GetRequiredService<ILogger<OpenAiOptions>>();
             var options = provider.GetRequiredService<IOptions<OpenAiOptions>>().Value;
+            var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, false, loggerFactory) };
+
+            if (string.IsNullOrWhiteSpace(options.ModelId))
+            {
+                throw new InvalidOperationException("未配置 Model Id，请设置 WINTEAM_MODELID。");
+            }
 
             if (string.IsNullOrWhiteSpace(options.ApiKey))
             {
-                throw new InvalidOperationException("未配置 OpenAI API Key，请设置 WINTEAM_APIKEY。");
+                throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
             }
 
-            logger.LogInformation("BaseUrl:{BaseUrl}", string.IsNullOrWhiteSpace(options.BaseUrl) ? "(default)" : options.BaseUrl);
-            logger.LogInformation("ModelId:{ModelId}", options.ModelId);
-
-            var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, true, loggerFactory) };
             if (!string.IsNullOrWhiteSpace(options.BaseUrl))
             {
                 if (!Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var endpoint))
@@ -89,7 +91,10 @@ internal static class ServiceCollectionExtensions
                 }
 
                 clientOptions.Endpoint = endpoint;
+                logger.LogInformation("BaseUrl:{BaseUrl}", options.BaseUrl);
             }
+
+            logger.LogInformation("ModelId:{ModelId}", options.ModelId);
 
             var chatClient = new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions)
                 .GetResponsesClient()

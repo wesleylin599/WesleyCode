@@ -97,7 +97,6 @@ internal class LoggingAuthPolicy : PipelinePolicy
             message.Response.ContentStream.CopyTo(ms);
             var body = Encoding.UTF8.GetString(ms.ToArray());
             var preview = CreateSafePreview(body);
-            message.Response.ContentStream.Position = 0;
             _logger.LogWarning("HTTP error response body (preview): {Preview}", preview);
         }
     }
@@ -110,7 +109,6 @@ internal class LoggingAuthPolicy : PipelinePolicy
             await message.Response.ContentStream.CopyToAsync(ms);
             var body = Encoding.UTF8.GetString(ms.ToArray());
             var preview = CreateSafePreview(body);
-            message.Response.ContentStream.Position = 0;
             _logger.LogWarning("HTTP error response body (preview): {Preview}", preview);
         }
     }

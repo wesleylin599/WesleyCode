@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Runtime.CompilerServices;
+using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
@@ -69,4 +70,7 @@ internal static class AgentRunnerExtensions
 
         throw new InvalidOperationException("代理连续多次未返回可显示内容,请调整输入后重试。");
     }
+
+    public static void LogEventId(this ILogger logger, string message, [CallerLineNumber] int lineNumber = 0) =>
+        logger.LogError(new EventId(lineNumber), message);
 }
