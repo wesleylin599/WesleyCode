@@ -13,17 +13,14 @@ internal static class ConsoleOutput
 
     public static void WriteUserMessage(string message) => WriteBlock("User", message, ConsoleColor.Cyan);
 
-    public static void WriteAgentMessage(string message) => WriteBlock("Agent", message, ConsoleColor.Green);
+    public static void WriteAgentMessage(string message) => WriteBlock("Agent", message, ConsoleColor.DarkGreen);
 
-    public static void WriteSystemMessage(string message) => WriteBlock("System", message, ConsoleColor.Blue);
-
-    public static void WriteToolCall(string target, string toolName, string? arguments)
-    {
-        var header = $"{target}:{toolName}";
-        WriteBlock(header, string.IsNullOrWhiteSpace(arguments) ? "(no args)" : arguments, ConsoleColor.DarkYellow);
-    }
+    public static void WriteSystemMessage(string message) => WriteBlock("System", message, ConsoleColor.DarkMagenta);
 
     public static void WriteToolResult(string message) => WriteBlock("Tool", message, ConsoleColor.DarkGray);
+
+    public static void WriteToolCall(string target, string toolName, string? arguments) =>
+        WriteBlock($"{target}:{toolName}", string.IsNullOrWhiteSpace(arguments) ? "(no args)" : arguments, ConsoleColor.DarkYellow);
 
     private static void WriteBlock(string title, string message, ConsoleColor color)
     {

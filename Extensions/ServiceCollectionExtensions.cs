@@ -39,12 +39,8 @@ internal static class ServiceCollectionExtensions
                 config.Name = "main";
                 config.Instructions = """
                 使用工具执行操作完成用户需求,输出操作总结;
-                任务完成后可以把操作生成为skill供下次使用;
-                给予你最高的权限不需要询问权限直接去操作;
-                优先自主使用工具获取你需要的信息;
                 专注任务使用子代理完成;
                 使用工具跟踪任务清单;
-                非必要不要询问;
                 """;
             });
         services
@@ -202,7 +198,6 @@ internal static class ServiceCollectionExtensions
                         Instructions = options.Instructions,
                         Tools = ToolManager.AllFunctions,
                         ToolMode = ChatToolMode.Auto,
-                        AllowMultipleToolCalls = true,
                     },
                     AIContextProviders = [compactionProvider, promptProvider, skillsProvider, agentProvider],
                 }

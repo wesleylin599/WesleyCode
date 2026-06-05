@@ -91,9 +91,8 @@ internal sealed class SubAgentProvider : AIContextProvider
                 Description = content.Description,
                 ChatOptions = new ChatOptions
                 {
-                    Instructions = content.Instructions,
-                    AllowMultipleToolCalls = true,
                     ToolMode = ChatToolMode.Auto,
+                    Instructions = content.Instructions,
                     Tools = [ToolManager.CommandFunction],
                     Reasoning = reasoning,
                 },
