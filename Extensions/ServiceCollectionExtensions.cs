@@ -152,16 +152,13 @@ internal static class ServiceCollectionExtensions
         {
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var systemSkills = Path.Combine(AppContext.BaseDirectory, "skills", "system");
-            var localBase = Path.Combine(AppContext.BaseDirectory, "skills", "user");
-            var localWork = Path.Combine(workDirectory, "skills", "user");
+            var localSkills = Path.Combine(AppContext.BaseDirectory, "skills", "user");
 
             var defaultInstructions = new StringBuilder(_baseSkillsInstructions);
-            defaultInstructions.AppendLine($"skills 目标目录");
-            defaultInstructions.AppendLine($"保存到工作目录 \"{localWork}\"");
-            defaultInstructions.AppendLine($"保存到系统目录 \"{localBase}\"");
+            defaultInstructions.AppendLine($"skills 操作目标目录 \"{localSkills}\"");
 
             return new AgentSkillsProvider(
-                skillPaths: [systemSkills, localBase, localWork],
+                skillPaths: [systemSkills, localSkills],
                 options: new AgentSkillsProviderOptions { SkillsInstructionPrompt = defaultInstructions.ToString() },
                 loggerFactory: loggerFactory
             );

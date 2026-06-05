@@ -1,105 +1,105 @@
 {
   "sentiment_analysis": [
     {
-      "input": "This product exceeded my expectations! The quality is outstanding.",
-      "output": "Positive"
+      "input": "这个产品超出了我的预期！质量非常好。",
+      "output": "正面"
     },
     {
-      "input": "Terrible experience. The item arrived damaged and customer service was unhelpful.",
-      "output": "Negative"
+      "input": "体验很糟糕。商品到货时已经损坏，客服也没有帮助。",
+      "output": "负面"
     },
     {
-      "input": "The product works as described. Nothing special, but does the job.",
-      "output": "Neutral"
+      "input": "产品和描述一致。没有特别惊艳，但能完成工作。",
+      "output": "中性"
     }
   ],
   "entity_extraction": [
     {
-      "input": "Apple CEO Tim Cook announced the new iPhone at an event in Cupertino on September 12th.",
+      "input": "苹果 CEO 蒂姆·库克于 9 月 12 日在库比蒂诺的一场活动中发布了新款 iPhone。",
       "output": {
-        "persons": ["Tim Cook"],
-        "organizations": ["Apple"],
+        "persons": ["蒂姆·库克"],
+        "organizations": ["苹果"],
         "products": ["iPhone"],
-        "locations": ["Cupertino"],
-        "dates": ["September 12th"]
+        "locations": ["库比蒂诺"],
+        "dates": ["9 月 12 日"]
       }
     },
     {
-      "input": "Microsoft acquired GitHub for $7.5 billion in 2018.",
+      "input": "微软于 2018 年以 75 亿美元收购 GitHub。",
       "output": {
         "persons": [],
-        "organizations": ["Microsoft", "GitHub"],
+        "organizations": ["微软", "GitHub"],
         "products": [],
         "locations": [],
-        "dates": ["2018"],
-        "monetary_values": ["$7.5 billion"]
+        "dates": ["2018 年"],
+        "monetary_values": ["75 亿美元"]
       }
     }
   ],
   "code_generation": [
     {
-      "input": "Write a Python function to check if a string is a palindrome",
-      "output": "def is_palindrome(s: str) -> bool:\n    \"\"\"Check if string is palindrome, ignoring case and spaces.\"\"\"\n    # Remove spaces and convert to lowercase\n    cleaned = s.replace(' ', '').lower()\n    # Compare with reversed string\n    return cleaned == cleaned[::-1]"
+      "input": "编写一个 Python 函数，检查字符串是否为回文",
+      "output": "def is_palindrome(s: str) -> bool:\n    \"\"\"Check if string is palindrome, ignoring case and spaces.\"\"\"\n    cleaned = s.replace(' ', '').lower()\n    return cleaned == cleaned[::-1]"
     }
   ],
   "text_classification": [
     {
-      "input": "How do I reset my password?",
+      "input": "我该如何重置密码？",
       "output": "account_management"
     },
     {
-      "input": "My order hasn't arrived yet. Where is it?",
+      "input": "我的订单还没到，在哪里可以查看？",
       "output": "shipping_inquiry"
     },
     {
-      "input": "I'd like to cancel my subscription.",
+      "input": "我想取消订阅。",
       "output": "subscription_cancellation"
     },
     {
-      "input": "The app keeps crashing when I try to log in.",
+      "input": "我尝试登录时应用一直崩溃。",
       "output": "technical_support"
     }
   ],
   "data_transformation": [
     {
-      "input": "John Smith, john@email.com, (555) 123-4567",
+      "input": "张三, zhangsan@email.com, 138-0000-0000",
       "output": {
-        "name": "John Smith",
-        "email": "john@email.com",
-        "phone": "(555) 123-4567"
+        "name": "张三",
+        "email": "zhangsan@email.com",
+        "phone": "138-0000-0000"
       }
     },
     {
-      "input": "Jane Doe | jane.doe@company.com | +1-555-987-6543",
+      "input": "李四 | lisi@company.com | +86-139-0000-0000",
       "output": {
-        "name": "Jane Doe",
-        "email": "jane.doe@company.com",
-        "phone": "+1-555-987-6543"
+        "name": "李四",
+        "email": "lisi@company.com",
+        "phone": "+86-139-0000-0000"
       }
     }
   ],
   "question_answering": [
     {
-      "context": "The Eiffel Tower is a wrought-iron lattice tower in Paris, France. It was constructed from 1887 to 1889 and stands 324 meters (1,063 ft) tall.",
-      "question": "When was the Eiffel Tower built?",
-      "answer": "The Eiffel Tower was constructed from 1887 to 1889."
+      "context": "埃菲尔铁塔是一座位于法国巴黎的熟铁格构塔。它建于 1887 年至 1889 年，高 324 米。",
+      "question": "埃菲尔铁塔是什么时候建造的？",
+      "answer": "埃菲尔铁塔建于 1887 年至 1889 年。"
     },
     {
-      "context": "Python 3.11 was released on October 24, 2022. It includes performance improvements and new features like exception groups and improved error messages.",
-      "question": "What are the new features in Python 3.11?",
-      "answer": "Python 3.11 includes exception groups, improved error messages, and performance improvements."
+      "context": "Python 3.11 于 2022 年 10 月 24 日发布。它包含性能改进，以及异常组和更好的错误消息等新功能。",
+      "question": "Python 3.11 有哪些新功能？",
+      "answer": "Python 3.11 包含异常组、更好的错误消息和性能改进。"
     }
   ],
   "summarization": [
     {
-      "input": "Climate change refers to long-term shifts in global temperatures and weather patterns. While climate change is natural, human activities have been the main driver since the 1800s, primarily due to the burning of fossil fuels like coal, oil and gas which produces heat-trapping greenhouse gases. The consequences include rising sea levels, more extreme weather events, and threats to biodiversity.",
-      "output": "Climate change involves long-term alterations in global temperatures and weather patterns, primarily driven by human fossil fuel consumption since the 1800s, resulting in rising sea levels, extreme weather, and biodiversity threats."
+      "input": "气候变化指全球气温和天气模式的长期变化。虽然气候变化也可能自然发生，但自 19 世纪以来，人类活动一直是主要驱动因素，主要原因是燃烧煤、石油和天然气等化石燃料会产生吸热温室气体。其后果包括海平面上升、更极端的天气事件以及对生物多样性的威胁。",
+      "output": "气候变化是全球气温和天气模式的长期改变，自 19 世纪以来主要由人类燃烧化石燃料驱动，并导致海平面上升、极端天气和生物多样性威胁。"
     }
   ],
   "sql_generation": [
     {
       "schema": "users (id, name, email, created_at)\norders (id, user_id, total, order_date)",
-      "request": "Find all users who have placed orders totaling more than $1000",
+      "request": "找出所有订单总额超过 1000 的用户",
       "output": "SELECT u.id, u.name, u.email, SUM(o.total) as total_spent\nFROM users u\nJOIN orders o ON u.id = o.user_id\nGROUP BY u.id, u.name, u.email\nHAVING SUM(o.total) > 1000;"
     }
   ]

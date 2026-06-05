@@ -1,8 +1,8 @@
-# prompt-engineering-patterns — detailed patterns and worked examples
+# prompt-engineering-patterns 详细模式与完整示例
 
-## Key Patterns
+## 关键模式
 
-### Pattern 1: Structured Output with Pydantic
+### 模式 1：使用 Pydantic 的结构化输出
 
 ```python
 from anthropic import Anthropic
@@ -42,7 +42,7 @@ Respond with JSON matching this schema:
     return SentimentAnalysis(**json.loads(message.content[0].text))
 ```
 
-### Pattern 2: Chain-of-Thought with Self-Verification
+### 模式 2：带自我验证的思维链
 
 ```python
 from langchain_core.prompts import ChatPromptTemplate
@@ -70,14 +70,14 @@ Format your response as:
 """)
 ```
 
-### Pattern 3: Few-Shot with Dynamic Example Selection
+### 模式 3：动态示例选择的 Few-Shot
 
 ```python
 from langchain_voyageai import VoyageAIEmbeddings
 from langchain_core.example_selectors import SemanticSimilarityExampleSelector
 from langchain_chroma import Chroma
 
-# Create example selector with semantic similarity
+# 使用语义相似度创建示例选择器
 example_selector = SemanticSimilarityExampleSelector.from_examples(
     examples=[
         {"input": "How do I reset my password?", "output": "Go to Settings > Security > Reset Password"},
@@ -86,7 +86,7 @@ example_selector = SemanticSimilarityExampleSelector.from_examples(
     ],
     embeddings=VoyageAIEmbeddings(model="voyage-3-large"),
     vectorstore_cls=Chroma,
-    k=2  # Select 2 most similar examples
+    k=2  # 选择 2 个最相似示例
 )
 
 async def get_few_shot_prompt(query: str) -> str:
@@ -108,16 +108,16 @@ User: {query}
 Assistant:"""
 ```
 
-### Pattern 4: Progressive Disclosure
+### 模式 4：渐进式披露
 
-Start with simple prompts, add complexity only when needed:
+从简单提示词开始，只在必要时增加复杂度：
 
 ```python
 PROMPT_LEVELS = {
-    # Level 1: Direct instruction
+    # 第 1 层：直接指令
     "simple": "Summarize this article: {text}",
 
-    # Level 2: Add constraints
+    # 第 2 层：增加约束
     "constrained": """Summarize this article in 3 bullet points, focusing on:
 - Key findings
 - Main conclusions
@@ -125,7 +125,7 @@ PROMPT_LEVELS = {
 
 Article: {text}""",
 
-    # Level 3: Add reasoning
+    # 第 3 层：增加推理
     "reasoning": """Read this article carefully.
 1. First, identify the main topic and thesis
 2. Then, extract the key supporting points
@@ -135,15 +135,15 @@ Article: {text}
 
 Summary:""",
 
-    # Level 4: Add examples
+    # 第 4 层：增加示例
     "few_shot": """Read articles and provide concise summaries.
 
 Example:
 Article: "New research shows that regular exercise can reduce anxiety by up to 40%..."
 Summary:
-• Regular exercise reduces anxiety by up to 40%
-• 30 minutes of moderate activity 3x/week is sufficient
-• Benefits appear within 2 weeks of starting
+- Regular exercise reduces anxiety by up to 40%
+- 30 minutes of moderate activity 3x/week is sufficient
+- Benefits appear within 2 weeks of starting
 
 Now summarize this article:
 Article: {text}
@@ -152,7 +152,7 @@ Summary:"""
 }
 ```
 
-### Pattern 5: Error Recovery and Fallback
+### 模式 5：错误恢复与回退
 
 ```python
 from pydantic import BaseModel, ValidationError
@@ -197,7 +197,7 @@ async def answer_with_fallback(
         response = await llm.ainvoke(prompt)
         return ResponseWithConfidence(**json.loads(response.content))
     except (json.JSONDecodeError, ValidationError) as e:
-        # Fallback: try to extract answer without structure
+        # 回退：尝试无结构提取答案
         simple_prompt = f"Based on: {context}\n\nAnswer: {question}"
         simple_response = await llm.ainvoke(simple_prompt)
         return ResponseWithConfidence(
@@ -208,7 +208,7 @@ async def answer_with_fallback(
         )
 ```
 
-### Pattern 6: Role-Based System Prompts
+### 模式 6：基于角色的系统提示词
 
 ```python
 SYSTEM_PROMPTS = {
@@ -255,9 +255,9 @@ Output format:
 }
 ```
 
-## Integration Patterns
+## 集成模式
 
-### With RAG Systems
+### 与 RAG 系统结合
 
 ```python
 RAG_PROMPT = """You are a knowledgeable assistant that answers questions based on provided context.
@@ -276,7 +276,7 @@ Question: {question}
 Answer:"""
 ```
 
-### With Validation and Verification
+### 与验证和校验结合
 
 ```python
 VALIDATED_PROMPT = """Complete the following task:
@@ -284,30 +284,30 @@ VALIDATED_PROMPT = """Complete the following task:
 Task: {task}
 
 After generating your response, verify it meets ALL these criteria:
-✓ Directly addresses the original request
-✓ Contains no factual errors
-✓ Is appropriately detailed (not too brief, not too verbose)
-✓ Uses proper formatting
-✓ Is safe and appropriate
+- Directly addresses the original request
+- Contains no factual errors
+- Is appropriately detailed (not too brief, not too verbose)
+- Uses proper formatting
+- Is safe and appropriate
 
 If verification fails on any criterion, revise before responding.
 
 Response:"""
 ```
 
-## Performance Optimization
+## 性能优化
 
-### Token Efficiency
+### Token 效率
 
 ```python
-# Before: Verbose prompt (150+ tokens)
+# 优化前：冗长提示词（150+ tokens）
 verbose_prompt = """
 I would like you to please take the following text and provide me with a comprehensive
 summary of the main points. The summary should capture the key ideas and important details
 while being concise and easy to understand.
 """
 
-# After: Concise prompt (30 tokens)
+# 优化后：简洁提示词（约 30 tokens）
 concise_prompt = """Summarize the key points concisely:
 
 {text}
@@ -315,14 +315,14 @@ concise_prompt = """Summarize the key points concisely:
 Summary:"""
 ```
 
-### Caching Common Prefixes
+### 缓存通用前缀
 
 ```python
 from anthropic import Anthropic
 
 client = Anthropic()
 
-# Use prompt caching for repeated system prompts
+# 对重复使用的系统提示词使用 prompt caching
 response = client.messages.create(
     model="claude-sonnet-4-6",
     max_tokens=1000,

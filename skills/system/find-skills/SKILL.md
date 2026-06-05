@@ -76,7 +76,6 @@ vercel-labs/agent-skills@vercel-react-best-practices
 
 ```
 我找到了一个可能有帮助的技能！"vercel-react-best-practices" 技能提供来自 Vercel Engineering 的 React 和 Next.js 性能优化指南。
-React and Next.js performance optimization guidelines from Vercel Engineering.
 
 安装方式：
 npx skills add vercel-labs/agent-skills@vercel-react-best-practices
@@ -98,15 +97,15 @@ npx skills add <owner/repo@skill> -g -y
 
 搜索时可参考这些常见类别：
 
-| Category        | Example Queries                          |
-| --------------- | ---------------------------------------- |
-| Web Development | react, nextjs, typescript, css, tailwind |
-| Testing         | testing, jest, playwright, e2e           |
-| DevOps          | deploy, docker, kubernetes, ci-cd        |
-| Documentation   | docs, readme, changelog, api-docs        |
-| Code Quality    | review, lint, refactor, best-practices   |
-| Design          | ui, ux, design-system, accessibility     |
-| Productivity    | workflow, automation, git                |
+| 类别 | 示例查询 |
+| ---- | -------- |
+| Web 开发 | react, nextjs, typescript, css, tailwind |
+| 测试 | testing, jest, playwright, e2e |
+| DevOps | deploy, docker, kubernetes, ci-cd |
+| 文档 | docs, readme, changelog, api-docs |
+| 代码质量 | review, lint, refactor, best-practices |
+| 设计 | ui, ux, design-system, accessibility |
+| 生产力 | workflow, automation, git |
 
 ## 有效搜索的小技巧
 

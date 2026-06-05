@@ -79,7 +79,7 @@ internal static class ToolManager
     }
 
     [Description("获取一条未开始的任务")]
-    private static TaskItem? ReadTasks() => Tasks.Where(t => t.Status == "未开始").OrderBy(x => x.Num).FirstOrDefault();
+    private static List<TaskItem> ReadTasks() => Tasks.OrderBy(x => x.Num).ToList();
 
     private static string DecodeCommandOutput(byte[] buffer)
     {
