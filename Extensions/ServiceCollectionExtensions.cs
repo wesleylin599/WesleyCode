@@ -16,6 +16,22 @@ namespace WesleyCode.Extensions;
 
 internal static class ServiceCollectionExtensions
 {
+    private const string _baseSkillsInstructions = """
+        You have access to skills containing domain-specific knowledge and capabilities.
+        Each skill provides specialized instructions, reference documents, and assets for specific tasks.
+
+        <available_skills>
+        {{skills}}
+        </available_skills>
+
+        When a task aligns with a skill's domain, follow these steps in exact order:
+        - Use `load_skill` to retrieve the skill's instructions.
+        - Follow the provided guidance.
+        {{resource_instructions}}
+        {{script_instructions}}
+        Only load what is needed, when it is needed.
+        """;
+
     public static IHostApplicationBuilder AddAgentHost(this IHostApplicationBuilder builder, string workDirectory)
     {
         builder.Services.AddAgentHost(builder.Configuration, workDirectory);
@@ -41,6 +57,7 @@ internal static class ServiceCollectionExtensions
                 使用工具执行操作完成用户需求;
                 专注任务使用子代理完成;
                 使用工具跟踪任务清单;
+                按照任务清单逐条完成;
                 """;
             });
         services
@@ -71,7 +88,7 @@ internal static class ServiceCollectionExtensions
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var logger = provider.GetRequiredService<ILogger<OpenAiOptions>>();
             var options = provider.GetRequiredService<IOptions<OpenAiOptions>>().Value;
-            var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, false, loggerFactory) };
+            var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, true, loggerFactory) };
 
             if (string.IsNullOrWhiteSpace(options.ModelId))
             {
@@ -135,36 +152,17 @@ internal static class ServiceCollectionExtensions
         {
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var systemSkills = Path.Combine(AppContext.BaseDirectory, "skills", "system");
-            var localUserSkills = Path.Combine(AppContext.BaseDirectory, "skills", "user");
+            var localBase = Path.Combine(AppContext.BaseDirectory, "skills", "user");
+            var localWork = Path.Combine(workDirectory, "skills", "user");
 
-            var defaultInstructions = new StringBuilder(
-                """
-                You have access to skills containing domain-specific knowledge and capabilities.
-                Each skill provides specialized instructions, reference documents, and assets for specific tasks.
-
-                <available_skills>
-                {{skills}}
-                </available_skills>
-
-                When a task aligns with a skill's domain, follow these steps in exact order:
-                - Use `load_skill` to retrieve the skill's instructions.
-                - Follow the provided guidance.
-                {{resource_instructions}}
-                {{script_instructions}}
-                Only load what is needed, when it is needed.
-                """
-            );
-
-            defaultInstructions.AppendLine($"Put the newly added skills in the {localUserSkills} directory.");
+            var defaultInstructions = new StringBuilder(_baseSkillsInstructions);
+            defaultInstructions.AppendLine($"skills 目标目录");
+            defaultInstructions.AppendLine($"保存到工作目录 \"{localWork}\"");
+            defaultInstructions.AppendLine($"保存到系统目录 \"{localBase}\"");
 
             return new AgentSkillsProvider(
-                skillPaths: [systemSkills, localUserSkills],
-                options: new AgentSkillsProviderOptions
-                {
-                    SkillsInstructionPrompt = defaultInstructions.ToString(),
-                    ScriptApproval = false,
-                    DisableCaching = false,
-                },
+                skillPaths: [systemSkills, localBase, localWork],
+                options: new AgentSkillsProviderOptions { SkillsInstructionPrompt = defaultInstructions.ToString() },
                 loggerFactory: loggerFactory
             );
         });

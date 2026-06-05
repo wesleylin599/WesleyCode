@@ -11,22 +11,24 @@ internal static class ConsoleOutput
         Console.Write("  ");
     }
 
-    public static void WriteUserMessage(string message) => WriteBlock("User", message, ConsoleColor.Cyan);
+    public static void WriteUserMessage(string message) => WriteBlock("User", message, ConsoleColor.Cyan, ConsoleColor.Gray);
 
-    public static void WriteAgentMessage(string message) => WriteBlock("Agent", message, ConsoleColor.DarkGreen);
+    public static void WriteAgentMessage(string message) => WriteBlock("Agent", message, ConsoleColor.DarkGreen, ConsoleColor.Gray);
 
-    public static void WriteSystemMessage(string message) => WriteBlock("System", message, ConsoleColor.DarkMagenta);
+    public static void WriteSystemMessage(string message) => WriteBlock("System", message, ConsoleColor.DarkMagenta, ConsoleColor.Gray);
 
-    public static void WriteToolResult(string message) => WriteBlock("Tool", message, ConsoleColor.DarkGray);
+    public static void WriteToolResult(string callId, string message) =>
+        WriteBlock($"[{callId}] Tool", message, ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
-    public static void WriteToolCall(string target, string toolName, string? arguments) =>
-        WriteBlock($"{target}:{toolName}", string.IsNullOrWhiteSpace(arguments) ? "(no args)" : arguments, ConsoleColor.DarkYellow);
+    public static void WriteToolCall(string callId, string target, string toolName, string arguments) =>
+        WriteBlock($"[{callId}] {target}:{toolName}", arguments, ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
 
-    private static void WriteBlock(string title, string message, ConsoleColor color)
+    private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)
     {
-        Console.ForegroundColor = color;
+        Console.ForegroundColor = titleColor;
         Console.WriteLine($"> {title} >>>");
 
+        Console.ForegroundColor = contentColor;
         foreach (var line in Normalize(message))
         {
             Console.WriteLine($"  {line}");

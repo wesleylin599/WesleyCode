@@ -66,7 +66,7 @@ internal static class ToolManager
     {
         Tasks.Clear();
         StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.AppendLine($"任务清单已更新,共 {Tasks.Count} 条任务");
+        stringBuilder.AppendLine($"任务清单已更新,共 {tasks.Count} 条任务");
         foreach (var task in tasks ?? [])
         {
             if (string.IsNullOrWhiteSpace(task.Num + task.Title))

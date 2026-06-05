@@ -41,12 +41,13 @@ internal static class AgentRunnerExtensions
             {
                 var arguments = callContent.Arguments is { Count: > 0 }
                     ? string.Join(Environment.NewLine, callContent.Arguments.Select(static item => $"{item.Key}: {item.Value}"))
-                    : "null";
-                ConsoleOutput.WriteToolCall(target, callContent.Name, arguments);
+                    : "(no args)";
+
+                ConsoleOutput.WriteToolCall(callContent.CallId, target, callContent.Name, arguments);
             }
             else if (content is FunctionResultContent resultContent)
             {
-                ConsoleOutput.WriteToolResult(ToolConsoleLog(resultContent.Result?.ToString() ?? "null"));
+                ConsoleOutput.WriteToolResult(resultContent.CallId, ToolConsoleLog(resultContent.Result?.ToString() ?? "null"));
             }
         }
     }
