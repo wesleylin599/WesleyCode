@@ -2,11 +2,12 @@
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using WesleyCode.Extensions;
-using WesleyCode.Options;
-using WesleyCode.Services;
+using WesleyCode.Agent.Extensions;
+using WesleyCode.Agent.Options;
+using WesleyCode.Agent.Services;
+using WesleyCode.ConsoleHost.Extensions;
 
-namespace WesleyCode.Hosting;
+namespace WesleyCode.ConsoleHost.Hosting;
 
 internal sealed class ConsoleAgentHostedService : BackgroundService
 {
@@ -146,7 +147,12 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 try
                 {
                     var stopwatch = Stopwatch.StartNew();
-                    var response = await _agentRunner.ExecuteAsync(input, session, source.Token);
+                    var response = await _agentRunner.ExecuteAsync(
+                        input,
+                        session,
+                        source.Token,
+                        update => update.Contents.ConsoleLog(_agentRunner.Name)
+                    );
                     stopwatch.Stop();
                     ConsoleOutput.WriteAgentMessage(response.Text);
                     _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);

@@ -1,6 +1,6 @@
-﻿namespace WesleyCode.Options;
+﻿namespace WesleyCode.Agent.Options;
 
-internal sealed class SessionOptions
+public sealed class SessionOptions
 {
     public string DirectoryName { get; set; } = "session";
     public int SaveDebounceSeconds { get; set; } = 2;

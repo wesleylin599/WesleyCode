@@ -1,7 +1,7 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Microsoft.Extensions.AI;
 
-namespace WesleyCode.Infrastructure;
+namespace WesleyCode.Agent.Infrastructure;
 
 [DebuggerStepThrough]
 public sealed class CrsChatClient : DelegatingChatClient

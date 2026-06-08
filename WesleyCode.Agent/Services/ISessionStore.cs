@@ -1,8 +1,8 @@
 ﻿using Microsoft.Agents.AI;
 
-namespace WesleyCode.Services;
+namespace WesleyCode.Agent.Services;
 
-internal interface ISessionStore
+public interface ISessionStore
 {
     Task<AgentSession> LoadAsync(CancellationToken cancellationToken);
     Task SaveAsync(AgentSession session, CancellationToken cancellationToken);

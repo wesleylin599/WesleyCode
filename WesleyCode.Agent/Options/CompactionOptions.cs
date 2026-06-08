@@ -1,4 +1,4 @@
-﻿namespace WesleyCode.Options;
+namespace WesleyCode.Agent.Options;
 
 internal sealed class CompactionOptions
 {

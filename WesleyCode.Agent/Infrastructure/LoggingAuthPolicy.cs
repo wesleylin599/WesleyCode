@@ -1,9 +1,10 @@
 ﻿using System.ClientModel.Primitives;
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace WesleyCode.Infrastructure;
+namespace WesleyCode.Agent.Infrastructure;
 
 [DebuggerStepThrough]
 internal class LoggingAuthPolicy : PipelinePolicy

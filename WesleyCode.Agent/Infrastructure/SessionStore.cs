@@ -2,13 +2,14 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using WesleyCode.Options;
-using WesleyCode.Services;
+using WesleyCode.Agent.Options;
+using WesleyCode.Agent.Services;
 
-namespace WesleyCode.Infrastructure;
+namespace WesleyCode.Agent.Infrastructure;
 
-internal sealed class SessionStore : ISessionStore
+public sealed class SessionStore : ISessionStore
 {
     private static readonly UTF8Encoding SessionEncoding = new(true);
     private readonly AIAgent _agentRunner;

@@ -1,6 +1,6 @@
-﻿using System.Text;
+using System.Text;
 
-namespace WesleyCode.Infrastructure;
+namespace WesleyCode.Agent.Infrastructure;
 
 internal sealed record TextFileContent(string Content, Encoding Encoding, string EncodingName, string LineEnding);
 

@@ -1,4 +1,4 @@
-﻿namespace WesleyCode.Extensions;
+﻿namespace WesleyCode.ConsoleHost.Extensions;
 
 internal static class ConsoleOutput
 {

@@ -5,16 +5,19 @@ using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenAI;
-using WesleyCode.Hosting;
-using WesleyCode.Infrastructure;
-using WesleyCode.Options;
-using WesleyCode.Services;
+using WesleyCode.Agent.Infrastructure;
+using WesleyCode.Agent.Options;
+using WesleyCode.Agent.Services;
 
-namespace WesleyCode.Extensions;
+namespace WesleyCode.Agent.Extensions;
 
-internal static class ServiceCollectionExtensions
+public static class ServiceCollectionExtensions
 {
     private const string _baseSkillsInstructions = """
         You have access to skills containing domain-specific knowledge and capabilities.
@@ -205,7 +208,6 @@ internal static class ServiceCollectionExtensions
         });
 
         services.AddSingleton<ISessionStore, SessionStore>();
-        services.AddHostedService<ConsoleAgentHostedService>();
 
         return services;
     }

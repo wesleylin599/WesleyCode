@@ -1,8 +1,9 @@
 ﻿using System.Text;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace WesleyCode.Services;
+namespace WesleyCode.Agent.Services;
 
 internal sealed class SystemPromptProvider : AIContextProvider
 {

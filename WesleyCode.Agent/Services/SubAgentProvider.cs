@@ -3,10 +3,11 @@ using System.Security;
 using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using WesleyCode.Extensions;
+using WesleyCode.Agent.Extensions;
 
-namespace WesleyCode.Services;
+namespace WesleyCode.Agent.Services;
 
 internal sealed class SubAgentProvider : AIContextProvider
 {
