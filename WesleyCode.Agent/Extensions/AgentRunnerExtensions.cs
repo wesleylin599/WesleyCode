@@ -16,9 +16,10 @@ public static class AgentRunnerExtensions
         Action<AgentResponseUpdate>? onUpdate = null
     )
     {
+        var updates = new List<AgentResponseUpdate>();
         for (var attempt = 0; attempt < MaxEmptyResponseRetries; attempt++)
         {
-            var updates = new List<AgentResponseUpdate>();
+            updates.Clear();
             await foreach (var agentResponse in agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
             {
                 updates.Add(agentResponse);

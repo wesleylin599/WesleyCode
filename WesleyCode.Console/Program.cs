@@ -1,13 +1,14 @@
-﻿using WesleyCode.ConsoleHost.Extensions;
+﻿using WesleyCode.Agent.Extensions;
+using WesleyCode.ConsoleHost.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole(options =>
 {
     options.SingleLine = true;
     options.TimestampFormat = "HH:mm:ss ";
 });
-builder.AddConsoleAgentHost(Directory.GetCurrentDirectory());
+builder.AddAgentHost(Directory.GetCurrentDirectory());
+builder.Services.AddHostedService<ConsoleAgentHostedService>();
 using var host = builder.Build();
 await host.RunAsync();
