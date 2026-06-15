@@ -1,4 +1,4 @@
-﻿namespace WesleyCode.ConsoleHost.Hosting;
+﻿namespace WesleyCode.Console.Hosting;
 
 internal sealed class ConsoleLifecycle : IDisposable
 {
@@ -7,7 +7,7 @@ internal sealed class ConsoleLifecycle : IDisposable
     public ConsoleLifecycle()
     {
         _cts = new CancellationTokenSource();
-        Console.CancelKeyPress += Console_CancelKeyPress;
+        System.Console.CancelKeyPress += Console_CancelKeyPress;
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
     }
 
@@ -26,7 +26,7 @@ internal sealed class ConsoleLifecycle : IDisposable
 
     public void Dispose()
     {
-        Console.CancelKeyPress -= Console_CancelKeyPress;
+        System.Console.CancelKeyPress -= Console_CancelKeyPress;
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         _cts.Dispose();
     }

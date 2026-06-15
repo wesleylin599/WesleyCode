@@ -1,18 +1,17 @@
 ﻿using System.Diagnostics;
 using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Options;
 using WesleyCode.Agent.Services;
-using WesleyCode.ConsoleHost.Extensions;
+using WesleyCode.Console.Extensions;
 
-namespace WesleyCode.ConsoleHost.Hosting;
+namespace WesleyCode.Console.Hosting;
 
 internal sealed class ConsoleAgentHostedService : BackgroundService
 {
-    private readonly AIAgent _agentRunner;
+    private readonly IAgentRunner _agentRunner;
     private readonly ISessionStore _sessionStore;
+    private readonly IOutputCapture _outputCapture;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<ConsoleAgentHostedService> _logger;
     private readonly SessionOptions _sessionOptions;
@@ -20,8 +19,9 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private bool _sessionDirty;
 
     public ConsoleAgentHostedService(
-        AIAgent agentRunner,
+        IAgentRunner agentRunner,
         ISessionStore sessionStore,
+        IOutputCapture outputCapture,
         IHostApplicationLifetime lifetime,
         IOptions<SessionOptions> sessionOptions,
         ILogger<ConsoleAgentHostedService> logger
@@ -29,6 +29,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     {
         _agentRunner = agentRunner;
         _sessionStore = sessionStore;
+        _outputCapture = outputCapture;
         _lifetime = lifetime;
         _sessionOptions = sessionOptions.Value;
         _logger = logger;
@@ -87,9 +88,9 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         {
             try
             {
-                if (Console.KeyAvailable)
+                if (System.Console.KeyAvailable)
                 {
-                    var key = Console.ReadKey(intercept: true);
+                    var key = System.Console.ReadKey(intercept: true);
                     if (key.Key == ConsoleKey.Escape)
                     {
                         _logger.LogInformation("收到取消指令，正在停止当前执行。");
@@ -108,14 +109,14 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private async Task RunLoopAsync(CancellationToken stoppingToken)
     {
         var session = await _sessionStore.LoadAsync(stoppingToken);
-        PrintHistory(session);
+        _agentRunner.RestartSession(session);
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await Task.Delay(100, stoppingToken);
-                ConsoleOutput.WritePrompt();
-                var input = Console.ReadLine();
+                _outputCapture.WritePrompt();
+                var input = System.Console.ReadLine();
                 if (input is null)
                 {
                     _logger.LogInformation("Standard input closed; exiting console loop.");
@@ -134,10 +135,10 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
 
                 if (string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.Clear();
+                    System.Console.Clear();
                     await _sessionStore.ClearAsync(stoppingToken);
                     MarkSessionDirty();
-                    ConsoleOutput.WriteSystemMessage("会话已重置。");
+                    _outputCapture.WriteSystemMessage("会话已重置。");
                     session = await _agentRunner.CreateSessionAsync(stoppingToken);
                     continue;
                 }
@@ -147,20 +148,15 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 try
                 {
                     var stopwatch = Stopwatch.StartNew();
-                    var response = await _agentRunner.ExecuteAsync(
-                        input,
-                        session,
-                        source.Token,
-                        update => update.Contents.ConsoleLog(_agentRunner.Name)
-                    );
+                    var response = await _agentRunner.ExecuteAsync(input, session, source.Token);
                     stopwatch.Stop();
-                    ConsoleOutput.WriteAgentMessage(response.Text);
+                    _outputCapture.WriteAgentMessage(response.Text);
                     _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
                     MarkSessionDirty();
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)
                 {
-                    ConsoleOutput.WriteSystemMessage("已取消当前代理执行。");
+                    _outputCapture.WriteSystemMessage("已取消当前代理执行。");
                 }
                 finally
                 {
@@ -171,34 +167,12 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogEventId(ex.Message);
-                ConsoleOutput.WriteSystemMessage("执行失败，请查看日志获取详细信息。");
+                _outputCapture.WriteSystemMessage("执行失败，请查看日志获取详细信息。");
             }
             finally
             {
                 await SafeSaveAsync(session, stoppingToken, force: false);
-                Console.ResetColor();
-            }
-        }
-    }
-
-    private void PrintHistory(AgentSession activeSession)
-    {
-        if (activeSession.TryGetInMemoryChatHistory(out var history) && history != null)
-        {
-            foreach (var message in history)
-            {
-                if (string.IsNullOrEmpty(message.Text))
-                {
-                    message.Contents.ConsoleLog(_agentRunner.Name);
-                }
-                else if (message.Role == ChatRole.User)
-                {
-                    ConsoleOutput.WriteUserMessage(message.Text);
-                }
-                else if (message.Role == ChatRole.Assistant)
-                {
-                    ConsoleOutput.WriteAgentMessage(message.Text);
-                }
+                System.Console.ResetColor();
             }
         }
     }

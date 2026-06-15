@@ -1,4 +1,5 @@
 ﻿using System.ClientModel;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
@@ -7,6 +8,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -87,9 +89,9 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IChatClient>(provider =>
         {
+            var capture = provider.GetRequiredService<IOutputCapture>();
             var cache = provider.GetRequiredService<IDistributedCache>();
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            var logger = provider.GetRequiredService<ILogger<OpenAiOptions>>();
             var options = provider.GetRequiredService<IOptions<OpenAiOptions>>().Value;
             var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, true, loggerFactory) };
 
@@ -111,10 +113,10 @@ public static class ServiceCollectionExtensions
                 }
 
                 clientOptions.Endpoint = endpoint;
-                logger.LogInformation("BaseUrl:{BaseUrl}", options.BaseUrl);
+                capture.WriteSystemMessage($"BaseUrl:{options.BaseUrl}");
             }
 
-            logger.LogInformation("ModelId:{ModelId}", options.ModelId);
+            capture.WriteSystemMessage($"ModelId:{options.ModelId}");
 
             var chatClient = new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions)
                 .GetResponsesClient()
@@ -207,7 +209,9 @@ public static class ServiceCollectionExtensions
             );
         });
 
+        services.TryAddSingleton<IOutputCapture, NullOutputCapture>();
         services.AddSingleton<ISessionStore, SessionStore>();
+        services.AddSingleton<IAgentRunner, AgentRunner>();
 
         return services;
     }

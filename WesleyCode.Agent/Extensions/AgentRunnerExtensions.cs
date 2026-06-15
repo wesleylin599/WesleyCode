@@ -1,10 +1,9 @@
-﻿using System.Runtime.CompilerServices;
-using Microsoft.Agents.AI;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Agents.AI;
+using WesleyCode.Agent.Services;
 
 namespace WesleyCode.Agent.Extensions;
 
-public static class AgentRunnerExtensions
+internal static class AgentRunnerExtensions
 {
     private const int MaxEmptyResponseRetries = 8;
 
@@ -12,8 +11,8 @@ public static class AgentRunnerExtensions
         this AIAgent agent,
         string input,
         AgentSession session,
-        CancellationToken cancellationToken,
-        Action<AgentResponseUpdate>? onUpdate = null
+        IOutputCapture? capture = null,
+        CancellationToken cancellationToken = default
     )
     {
         var updates = new List<AgentResponseUpdate>();
@@ -23,7 +22,7 @@ public static class AgentRunnerExtensions
             await foreach (var agentResponse in agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
             {
                 updates.Add(agentResponse);
-                onUpdate?.Invoke(agentResponse);
+                capture?.WriteTool(agentResponse.Contents, agentResponse.AuthorName);
             }
 
             var response = updates.ToAgentResponse();
@@ -35,7 +34,4 @@ public static class AgentRunnerExtensions
 
         throw new InvalidOperationException("代理连续多次未返回可显示内容,请调整输入后重试。");
     }
-
-    public static void LogEventId(this ILogger logger, string message, [CallerLineNumber] int lineNumber = 0) =>
-        logger.LogError(new EventId(lineNumber), message);
 }

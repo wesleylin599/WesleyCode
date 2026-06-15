@@ -1,5 +1,6 @@
 ﻿using WesleyCode.Agent.Extensions;
-using WesleyCode.ConsoleHost.Hosting;
+using WesleyCode.Agent.Services;
+using WesleyCode.Console.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.ClearProviders();
@@ -10,5 +11,7 @@ builder.Logging.AddSimpleConsole(options =>
 });
 builder.AddAgentHost(Directory.GetCurrentDirectory());
 builder.Services.AddHostedService<ConsoleAgentHostedService>();
+
+builder.Services.AddSingleton<IOutputCapture, ConsoleOutputCapture>();
 using var host = builder.Build();
 await host.RunAsync();
