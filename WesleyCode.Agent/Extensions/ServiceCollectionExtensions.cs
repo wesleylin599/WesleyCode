@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OllamaSharp;
 using OpenAI;
 using WesleyCode.Agent.Infrastructure;
 using WesleyCode.Agent.Options;
@@ -94,24 +95,16 @@ public static class ServiceCollectionExtensions
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var options = provider.GetRequiredService<IOptions<ChatClientOptions>>().Value;
 
-            if (string.IsNullOrWhiteSpace(options.ModelId))
-            {
-                throw new InvalidOperationException("未配置 Model Id，请设置 WINTEAM_MODELID。");
-            }
-
-            if (string.IsNullOrWhiteSpace(options.ApiKey))
-            {
-                throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
-            }
-
             var providerName = NormalizeProvider(options.Provider);
             var client = CreateChatClient(options, loggerFactory);
-            capture.WriteSystemMessage($"Provider:{providerName}");
+            StringBuilder builder = new StringBuilder();
+            builder.AppendLine($"Provider:{providerName}");
             if (!string.IsNullOrWhiteSpace(options.BaseUrl))
             {
-                capture.WriteSystemMessage($"BaseUrl:{options.BaseUrl}");
+                builder.AppendLine($"BaseUrl:{options.BaseUrl}");
             }
-            capture.WriteSystemMessage($"ModelId:{options.ModelId}");
+            builder.AppendLine($"ModelId:{options.ModelId}");
+            capture.WriteSystemMessage(builder.ToString());
 
             return client.AsBuilder().UseDistributedCache(cache).UseLogging(loggerFactory).Build();
         });
@@ -212,44 +205,70 @@ public static class ServiceCollectionExtensions
             "anthropic" => CreateAnthropicChatClient(options),
             "openai" => CreateOpenAiCompatibleChatClient(options, loggerFactory),
             "crs" => CreateCrsCompatibleChatClient(options, loggerFactory),
-            _ => throw new InvalidOperationException($"不支持的 IChatClient Provider: {options.Provider}。"),
+            "ollama" => CreateOllamaChatClient(options),
+            _ => throw new InvalidOperationException($"不支持的 IChatClient Provider: {options.Provider}。可选值: openai、anthropic、crs、ollama。"),
         };
     }
 
-    private static IChatClient CreateOpenAiCompatibleChatClient(ChatClientOptions options, ILoggerFactory loggerFactory, Uri? defaultEndpoint = null)
+    private static IChatClient CreateOpenAiCompatibleChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
     {
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
+        }
         var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, true, loggerFactory) };
-        var endpoint = GetEndpoint(options.BaseUrl, defaultEndpoint);
+        var endpoint = GetEndpoint(options.BaseUrl);
         if (endpoint is not null)
         {
             clientOptions.Endpoint = endpoint;
         }
 
-        return new OpenAIClient(new ApiKeyCredential(options.ApiKey!), clientOptions).GetChatClient(options.ModelId).AsIChatClient();
+        return new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions).GetChatClient(options.ModelId).AsIChatClient();
     }
 
-    private static IChatClient CreateCrsCompatibleChatClient(ChatClientOptions options, ILoggerFactory loggerFactory, Uri? defaultEndpoint = null)
+    private static IChatClient CreateCrsCompatibleChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
     {
-        var baseClient = CreateOpenAiCompatibleChatClient(options, loggerFactory, defaultEndpoint);
-
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
+        }
+        var baseClient = CreateOpenAiCompatibleChatClient(options, loggerFactory);
         return CrsChatClient.Create(baseClient);
     }
 
     private static IChatClient CreateAnthropicChatClient(ChatClientOptions options)
     {
-        var endpoint = GetEndpoint(options.BaseUrl, null);
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
+        }
+        var endpoint = GetEndpoint(options.BaseUrl);
         var client = endpoint is null
-            ? new AnthropicClient { ApiKey = options.ApiKey! }
-            : new AnthropicClient { ApiKey = options.ApiKey!, BaseUrl = endpoint.ToString().TrimEnd('/') };
+            ? new AnthropicClient { ApiKey = options.ApiKey }
+            : new AnthropicClient { ApiKey = options.ApiKey, BaseUrl = endpoint.ToString().TrimEnd('/') };
 
         return client.AsIChatClient(options.ModelId);
     }
 
-    private static Uri? GetEndpoint(string? baseUrl, Uri? defaultEndpoint)
+    private static IChatClient CreateOllamaChatClient(ChatClientOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
+        }
+        if (string.IsNullOrWhiteSpace(options.ModelId))
+        {
+            throw new InvalidOperationException("未配置 Model Id，请设置 WINTEAM_MODELID。");
+        }
+        var endpoint = GetEndpoint(options.BaseUrl);
+        return new OllamaApiClient(endpoint, options.ModelId);
+    }
+
+    private static Uri GetEndpoint(string? baseUrl)
     {
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            return defaultEndpoint;
+            throw new InvalidOperationException($"BaseUrl 配置为空");
         }
 
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var endpoint))

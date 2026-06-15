@@ -3,7 +3,7 @@
         "WesleyCode": {
             "commandName": "Project",
             "environmentVariables": {
-                "DOTNET_ENVIRONMENT": "local"
+                "DOTNET_ENVIRONMENT": "ollama"
             },
             "hotReloadEnabled": true
         }
