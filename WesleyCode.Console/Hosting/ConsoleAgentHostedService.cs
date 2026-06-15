@@ -3,7 +3,6 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.Options;
 using WesleyCode.Agent.Options;
 using WesleyCode.Agent.Services;
-using WesleyCode.Console.Extensions;
 
 namespace WesleyCode.Console.Hosting;
 
@@ -52,7 +51,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogEventId(ex.Message);
+            _outputCapture.WriteSystemMessage(ex.Message);
         }
         finally
         {
@@ -166,8 +165,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogEventId(ex.Message);
-                _outputCapture.WriteSystemMessage("执行失败，请查看日志获取详细信息。");
+                _outputCapture.WriteSystemMessage(ex.Message);
             }
             finally
             {

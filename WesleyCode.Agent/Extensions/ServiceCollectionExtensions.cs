@@ -60,9 +60,8 @@ public static class ServiceCollectionExtensions
                 config.Name = "main";
                 config.Instructions = """
                 使用工具执行操作完成用户需求;
-                专注任务使用子代理完成;
                 使用工具跟踪任务清单;
-                按照任务清单逐条完成;
+                完成后输出总结;
                 """;
             });
         services
@@ -199,7 +198,7 @@ public static class ServiceCollectionExtensions
                     Name = options.Name,
                     ChatOptions = new ChatOptions
                     {
-                        Reasoning = new ReasoningOptions { Output = ReasoningOutput.Full },
+                        Reasoning = new ReasoningOptions { Output = ReasoningOutput.Summary },
                         Instructions = options.Instructions,
                         Tools = ToolManager.AllFunctions,
                         ToolMode = ChatToolMode.Auto,
