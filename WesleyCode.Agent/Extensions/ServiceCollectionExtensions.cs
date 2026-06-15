@@ -1,6 +1,6 @@
 ﻿using System.ClientModel;
-using System.Runtime.CompilerServices;
 using System.Text;
+using Anthropic;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
@@ -46,9 +46,10 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAgentHost(this IServiceCollection services, IConfiguration configuration, string workDirectory)
     {
         services
-            .AddOptions<OpenAiOptions>()
+            .AddOptions<ChatClientOptions>()
             .Configure(config =>
             {
+                config.Provider = configuration.GetValue<string>("WINTEAM_PROVIDER");
                 config.ModelId = configuration.GetValue<string>("WINTEAM_MODELID");
                 config.BaseUrl = configuration.GetValue<string>("WINTEAM_BASEURL");
                 config.ApiKey = configuration.GetValue<string>("WINTEAM_APIKEY");
@@ -91,8 +92,7 @@ public static class ServiceCollectionExtensions
             var capture = provider.GetRequiredService<IOutputCapture>();
             var cache = provider.GetRequiredService<IDistributedCache>();
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            var options = provider.GetRequiredService<IOptions<OpenAiOptions>>().Value;
-            var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, true, loggerFactory) };
+            var options = provider.GetRequiredService<IOptions<ChatClientOptions>>().Value;
 
             if (string.IsNullOrWhiteSpace(options.ModelId))
             {
@@ -104,27 +104,16 @@ public static class ServiceCollectionExtensions
                 throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
             }
 
+            var providerName = NormalizeProvider(options.Provider);
+            var client = CreateChatClient(options, loggerFactory);
+            capture.WriteSystemMessage($"Provider:{providerName}");
             if (!string.IsNullOrWhiteSpace(options.BaseUrl))
             {
-                if (!Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var endpoint))
-                {
-                    throw new InvalidOperationException($"BaseUrl 配置无效: {options.BaseUrl}");
-                }
-
-                clientOptions.Endpoint = endpoint;
                 capture.WriteSystemMessage($"BaseUrl:{options.BaseUrl}");
             }
-
             capture.WriteSystemMessage($"ModelId:{options.ModelId}");
 
-            var chatClient = new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions)
-                .GetResponsesClient()
-                .AsIChatClient(options.ModelId)
-                .AsBuilder()
-                .UseDistributedCache(cache)
-                .UseLogging(loggerFactory)
-                .Build();
-            return CrsChatClient.Create(chatClient);
+            return client.AsBuilder().UseDistributedCache(cache).UseLogging(loggerFactory).Build();
         });
 
         services.AddSingleton<IDistributedCache>(provider =>
@@ -213,5 +202,71 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAgentRunner, AgentRunner>();
 
         return services;
+    }
+
+    private static IChatClient CreateChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
+    {
+        var providerName = NormalizeProvider(options.Provider);
+        return providerName switch
+        {
+            "anthropic" => CreateAnthropicChatClient(options),
+            "openai" => CreateOpenAiCompatibleChatClient(options, loggerFactory),
+            "crs" => CreateCrsCompatibleChatClient(options, loggerFactory),
+            _ => throw new InvalidOperationException($"不支持的 IChatClient Provider: {options.Provider}。"),
+        };
+    }
+
+    private static IChatClient CreateOpenAiCompatibleChatClient(ChatClientOptions options, ILoggerFactory loggerFactory, Uri? defaultEndpoint = null)
+    {
+        var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, true, loggerFactory) };
+        var endpoint = GetEndpoint(options.BaseUrl, defaultEndpoint);
+        if (endpoint is not null)
+        {
+            clientOptions.Endpoint = endpoint;
+        }
+
+        return new OpenAIClient(new ApiKeyCredential(options.ApiKey!), clientOptions).GetChatClient(options.ModelId).AsIChatClient();
+    }
+
+    private static IChatClient CreateCrsCompatibleChatClient(ChatClientOptions options, ILoggerFactory loggerFactory, Uri? defaultEndpoint = null)
+    {
+        var baseClient = CreateOpenAiCompatibleChatClient(options, loggerFactory, defaultEndpoint);
+
+        return CrsChatClient.Create(baseClient);
+    }
+
+    private static IChatClient CreateAnthropicChatClient(ChatClientOptions options)
+    {
+        var endpoint = GetEndpoint(options.BaseUrl, null);
+        var client = endpoint is null
+            ? new AnthropicClient { ApiKey = options.ApiKey! }
+            : new AnthropicClient { ApiKey = options.ApiKey!, BaseUrl = endpoint.ToString().TrimEnd('/') };
+
+        return client.AsIChatClient(options.ModelId);
+    }
+
+    private static Uri? GetEndpoint(string? baseUrl, Uri? defaultEndpoint)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            return defaultEndpoint;
+        }
+
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var endpoint))
+        {
+            throw new InvalidOperationException($"BaseUrl 配置无效: {baseUrl}");
+        }
+
+        return endpoint;
+    }
+
+    private static string NormalizeProvider(string? provider)
+    {
+        var value = string.IsNullOrWhiteSpace(provider) ? "crs" : provider.Trim().ToLowerInvariant();
+        return value switch
+        {
+            "authropic" => "anthropic",
+            _ => value,
+        };
     }
 }
