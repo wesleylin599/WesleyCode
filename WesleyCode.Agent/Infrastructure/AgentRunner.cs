@@ -27,13 +27,17 @@ internal class AgentRunner : IAgentRunner
         {
             foreach (var message in history)
             {
-                if (string.IsNullOrEmpty(message.Text))
-                {
-                    _capture.WriteTool(message.Contents, message.AuthorName);
-                }
-                else if (message.Role == ChatRole.User)
+                if (message.Role == ChatRole.User)
                 {
                     _capture.WriteUserMessage(message.Text);
+                }
+                else if (message.Role == ChatRole.System)
+                {
+                    _capture.WriteSystemMessage(message.Text);
+                }
+                else if (message.Contents.HasToolContent())
+                {
+                    _capture.WriteTool(message.Contents, message.AuthorName);
                 }
                 else if (message.Role == ChatRole.Assistant)
                 {

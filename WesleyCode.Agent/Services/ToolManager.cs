@@ -1,4 +1,4 @@
-using System.ComponentModel;
+ï»¿using System.ComponentModel;
 using System.Text;
 using CliWrap;
 using Microsoft.Extensions.AI;
@@ -22,12 +22,12 @@ internal static class ToolManager
     public static readonly AITool[] ReadFunctions = [CommandFunction, ReadTasksFunction];
     public static readonly AITool[] AllFunctions = [.. ReadFunctions, UpdateTasksFunction];
 
-    [Description("ÃüÁîĞĞ¹¤¾ß,ÓÃÓÚÖ´ĞĞÃüÁî²Ù×÷")]
-    private static async Task<string> Command([Description("ÃüÁî")] CommandItem command, CancellationToken cancellationToken = default)
+    [Description("å‘½ä»¤è¡Œå·¥å…·,ç”¨äºæ‰§è¡Œå‘½ä»¤æ“ä½œ")]
+    private static async Task<string> Command([Description("å‘½ä»¤")] CommandItem command, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(command.FileName))
         {
-            return "Error: ¹¤¾ßÃû³ÆÎª¿Õ";
+            return "Error: å·¥å…·åç§°ä¸ºç©º";
         }
 
         string output = string.Empty;
@@ -62,12 +62,12 @@ internal static class ToolManager
         return output;
     }
 
-    [Description("¸üĞÂÈÎÎñÇåµ¥,µ÷ÓÃĞèÒª´«ÈëÍêÕûµÄ¹¤×÷Çåµ¥")]
-    private static string UpdateTasks([Description("ÈÎÎñÇåµ¥ÁĞ±í")] List<TaskItem> tasks)
+    [Description("æ›´æ–°ä»»åŠ¡æ¸…å•,è°ƒç”¨éœ€è¦ä¼ å…¥å®Œæ•´çš„å·¥ä½œæ¸…å•")]
+    private static string UpdateTasks([Description("ä»»åŠ¡æ¸…å•åˆ—è¡¨")] List<TaskItem> tasks)
     {
         Tasks.Clear();
         StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.AppendLine($"ÈÎÎñÇåµ¥ÒÑ¸üĞÂ,¹² {tasks.Count} ÌõÈÎÎñ");
+        stringBuilder.AppendLine($"ä»»åŠ¡æ¸…å•å·²æ›´æ–°,å…± {tasks.Count} æ¡ä»»åŠ¡");
         foreach (var task in tasks ?? [])
         {
             if (string.IsNullOrWhiteSpace(task.Num + task.Title))
@@ -78,7 +78,7 @@ internal static class ToolManager
         return stringBuilder.ToString();
     }
 
-    [Description("»ñÈ¡Ò»ÌõÎ´¿ªÊ¼µÄÈÎÎñ")]
+    [Description("è·å–ä¸€æ¡æœªå¼€å§‹çš„ä»»åŠ¡")]
     private static List<TaskItem> ReadTasks() => Tasks.OrderBy(x => x.Num).ToList();
 
     private static string DecodeCommandOutput(byte[] buffer)
@@ -154,17 +154,19 @@ internal static class ToolManager
         return output.ToString().TrimEnd();
     }
 
+    [Description("å‘½ä»¤è°ƒç”¨æ¨¡å‹")]
     private sealed record CommandItem(
-        [Description("¹¤¾ßÃû³Æ")] string FileName,
-        [Description("¹¤¾ß²ÎÊı¼¯ºÏ")] List<string>? Arguments = null,
-        [Description("Ö´ĞĞ³¬Ê±ÃëÊı,Ä¬ÈÏ 60 Ãë,×î´ó 600 Ãë")] int TimeoutSeconds = 60
+        [Description("å·¥å…·åç§°")] string FileName,
+        [Description("å·¥å…·å‚æ•°é›†åˆ")] List<string>? Arguments = null,
+        [Description("æ‰§è¡Œè¶…æ—¶ç§’æ•°,é»˜è®¤ 60 ç§’,æœ€å¤§ 600 ç§’")] int TimeoutSeconds = 60
     );
 
+    [Description("ä»»åŠ¡è®°å½•æ¨¡å‹")]
     private sealed record TaskItem(
-        [Description("ÈÎÎñĞòºÅ")] int Num,
-        [Description("ÈÎÎñ±êÌâ")] string Title,
-        [Description("ÈÎÎñÏêÇé")] string Content,
-        [Description("Ö´ĞĞ½á¹û")] string Result,
-        [Description("ÈÎÎñ×´Ì¬,Ö»ÓĞ: Î´¿ªÊ¼,½øĞĞÖĞ,ÒÑÌø¹ı,ÒÑÍê³É")] string Status = "Î´¿ªÊ¼"
+        [Description("ä»»åŠ¡åºå·")] int Num,
+        [Description("ä»»åŠ¡æ ‡é¢˜")] string Title,
+        [Description("ä»»åŠ¡è¯¦æƒ…")] string Content,
+        [Description("æ‰§è¡Œç»“æœ")] string Result,
+        [Description("ä»»åŠ¡çŠ¶æ€,åªæœ‰: æœªå¼€å§‹,è¿›è¡Œä¸­,å·²è·³è¿‡,å·²å®Œæˆ")] string Status = "æœªå¼€å§‹"
     );
 }

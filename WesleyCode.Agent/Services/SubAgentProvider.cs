@@ -46,18 +46,21 @@ internal sealed class SubAgentProvider : AIContextProvider
 
     private readonly AITool[] _tools;
     private readonly IChatClient _client;
+    private readonly IOutputCapture _capture;
     private readonly AIContextProvider[] _providers;
     private readonly ILogger<SubAgentProvider> _logger;
     private readonly string _agentPrompt;
+
     private readonly Dictionary<string, AgentContent> _agents = new(StringComparer.OrdinalIgnoreCase)
     {
         [Planner.Name] = Planner,
         [Executor.Name] = Executor,
     };
 
-    public SubAgentProvider(IChatClient client, AIContextProvider[]? providers = null, ILoggerFactory? loggerFactory = null)
+    public SubAgentProvider(IChatClient client, IOutputCapture capture, AIContextProvider[]? providers = null, ILoggerFactory? loggerFactory = null)
     {
         _client = client;
+        _capture = capture;
         _providers = providers ?? [];
         _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<SubAgentProvider>();
         _tools = [AIFunctionFactory.Create(this.UseSubAgentAsync, name: "use_subAgent", description: "调用子代理,获取子代理执行结果.")];
@@ -102,7 +105,7 @@ internal sealed class SubAgentProvider : AIContextProvider
         );
         var session = await subAgent.CreateSessionAsync(cancellationToken);
 
-        var response = await subAgent.ExecuteAsync(input, session, cancellationToken: cancellationToken);
+        var response = await subAgent.ExecuteAsync(input, session, _capture, cancellationToken);
 
         _logger.LogDebug($"{content.Name} response...");
 

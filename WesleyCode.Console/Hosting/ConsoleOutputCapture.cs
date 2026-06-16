@@ -7,6 +7,7 @@ namespace WesleyCode.Console.Hosting;
 internal class ConsoleOutputCapture : IOutputCapture
 {
     private const int MaxLogLine = 10;
+    private const int MaxLogLength = 1000;
 
     public void WritePrompt()
     {
@@ -30,15 +31,11 @@ internal class ConsoleOutputCapture : IOutputCapture
         {
             if (content is FunctionCallContent callContent)
             {
-                var arguments = callContent.Arguments is { Count: > 0 }
-                    ? string.Join(Environment.NewLine, callContent.Arguments.Select(static item => $"{item.Key}: {item.Value}"))
-                    : "(no args)";
-
-                WriteToolCall(callContent.CallId, target, callContent.Name, arguments);
+                WriteToolCall(callContent.CallId, target, callContent.Name, FormatToolArguments(callContent.Arguments));
             }
             else if (content is FunctionResultContent resultContent)
             {
-                WriteToolResult(resultContent.CallId, FormatToolResult(resultContent.Result?.ToString()));
+                WriteToolResult(resultContent.CallId, FormatResult(resultContent.Result?.ToString()));
             }
         }
     }
@@ -47,7 +44,7 @@ internal class ConsoleOutputCapture : IOutputCapture
         WriteBlock($"[{callId}] {target}:{toolName}", arguments, ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
 
     private void WriteToolResult(string callId, string message) =>
-        WriteBlock($"[{callId}] Tool", message, ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
+        WriteBlock($"[{callId}] Tool Result", message, ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
     private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)
     {
@@ -60,6 +57,13 @@ internal class ConsoleOutputCapture : IOutputCapture
             System.Console.WriteLine($"  {line}");
         }
         System.Console.ResetColor();
+    }
+
+    private static string FormatToolArguments(IDictionary<string, object?>? arguments)
+    {
+        return arguments is { Count: > 0 }
+            ? string.Join(Environment.NewLine, arguments.Select(static item => $"{item.Key}: {item.Value}"))
+            : "(no args)";
     }
 
     private static IEnumerable<string> Normalize(string? message)
@@ -77,7 +81,7 @@ internal class ConsoleOutputCapture : IOutputCapture
         }
     }
 
-    private static string FormatToolResult(string? result)
+    private static string FormatResult(string? result)
     {
         if (string.IsNullOrEmpty(result))
         {
@@ -102,6 +106,9 @@ internal class ConsoleOutputCapture : IOutputCapture
 
             output.AppendLine(lines[index]);
         }
+
+        if (output.Length > MaxLogLength)
+            return output.ToString()[..MaxLogLength] + "......";
 
         return output.ToString();
     }

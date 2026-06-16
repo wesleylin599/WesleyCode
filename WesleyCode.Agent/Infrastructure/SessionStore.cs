@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Options;
 using WesleyCode.Agent.Services;
 
@@ -25,7 +26,7 @@ public sealed class SessionStore : ISessionStore
         var baseDir = AppContext.BaseDirectory;
         var sessionDir = Path.Combine(baseDir, _options.DirectoryName);
         var workDirectory = Directory.GetCurrentDirectory();
-        _sessionHistoryPath = Path.Combine(sessionDir, $"{ComputeMd5(workDirectory)}.json");
+        _sessionHistoryPath = Path.Combine(sessionDir, $"{workDirectory.ComputeMd5()}.json");
     }
 
     public async Task<AgentSession> LoadAsync(CancellationToken cancellationToken)
@@ -97,15 +98,6 @@ public sealed class SessionStore : ISessionStore
             _logger.LogInformation("Session history cleared: {SessionPath}", _sessionHistoryPath);
         }
         return Task.CompletedTask;
-    }
-
-    private static string ComputeMd5(string input)
-    {
-        using var md5 = MD5.Create();
-        var bytes = Encoding.UTF8.GetBytes(input);
-        var hash = md5.ComputeHash(bytes);
-        var segment = BitConverter.ToString(hash, 4, 8);
-        return segment.Replace("-", string.Empty);
     }
 
     private async Task BackupInvalidSessionAsync(string reason, CancellationToken cancellationToken)

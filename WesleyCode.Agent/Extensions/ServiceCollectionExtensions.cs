@@ -38,6 +38,9 @@ public static class ServiceCollectionExtensions
         Only load what is needed, when it is needed.
         """;
 
+    public static bool HasToolContent(this IList<AIContent> contents) =>
+        contents.Any(static content => content is FunctionCallContent or FunctionResultContent);
+
     public static IHostApplicationBuilder AddAgentHost(this IHostApplicationBuilder builder, string workDirectory)
     {
         builder.Services.AddAgentHost(builder.Configuration, workDirectory);
@@ -61,9 +64,10 @@ public static class ServiceCollectionExtensions
             {
                 config.Name = "main";
                 config.Instructions = """
+                你是一个自动化完成任务的智能体;
                 使用工具执行操作完成用户需求;
-                使用工具跟踪任务清单;
-                完成后输出总结;
+                及时使用工具跟踪任务清单;
+                执行完成后输出总结;
                 """;
             });
         services
@@ -95,10 +99,9 @@ public static class ServiceCollectionExtensions
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var options = provider.GetRequiredService<IOptions<ChatClientOptions>>().Value;
 
-            var providerName = NormalizeProvider(options.Provider);
             var client = CreateChatClient(options, loggerFactory);
             StringBuilder builder = new StringBuilder();
-            builder.AppendLine($"Provider:{providerName}");
+            builder.AppendLine($"Provider:{options.Provider}");
             if (!string.IsNullOrWhiteSpace(options.BaseUrl))
             {
                 builder.AppendLine($"BaseUrl:{options.BaseUrl}");
@@ -159,11 +162,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SubAgentProvider>(provider =>
         {
             var crsClient = provider.GetRequiredService<IChatClient>();
+            var capture = provider.GetRequiredService<IOutputCapture>();
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var compactionProvider = provider.GetRequiredService<CompactionProvider>();
             var promptProvider = provider.GetRequiredService<SystemPromptProvider>();
             var skillsProvider = provider.GetRequiredService<AgentSkillsProvider>();
-            return new SubAgentProvider(crsClient, [compactionProvider, promptProvider, skillsProvider], loggerFactory);
+            return new SubAgentProvider(crsClient, capture, [compactionProvider, promptProvider, skillsProvider], loggerFactory);
         });
 
         services.AddSingleton<AIAgent>(provider =>
@@ -199,18 +203,17 @@ public static class ServiceCollectionExtensions
 
     private static IChatClient CreateChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
     {
-        var providerName = NormalizeProvider(options.Provider);
-        return providerName switch
+        return options.Provider switch
         {
             "anthropic" => CreateAnthropicChatClient(options),
-            "openai" => CreateOpenAiCompatibleChatClient(options, loggerFactory),
-            "crs" => CreateCrsCompatibleChatClient(options, loggerFactory),
+            "openai" => CreateOpenAiChatClient(options, loggerFactory),
+            "crs" => CreateCrsChatClient(options, loggerFactory),
             "ollama" => CreateOllamaChatClient(options),
             _ => throw new InvalidOperationException($"不支持的 IChatClient Provider: {options.Provider}。可选值: openai、anthropic、crs、ollama。"),
         };
     }
 
-    private static IChatClient CreateOpenAiCompatibleChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
+    private static IChatClient CreateOpenAiChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
@@ -223,16 +226,16 @@ public static class ServiceCollectionExtensions
             clientOptions.Endpoint = endpoint;
         }
 
-        return new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions).GetChatClient(options.ModelId).AsIChatClient();
+        return new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions).GetResponsesClient().AsIChatClient(options.ModelId);
     }
 
-    private static IChatClient CreateCrsCompatibleChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
+    private static IChatClient CreateCrsChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
             throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
         }
-        var baseClient = CreateOpenAiCompatibleChatClient(options, loggerFactory);
+        var baseClient = CreateOpenAiChatClient(options, loggerFactory);
         return CrsChatClient.Create(baseClient);
     }
 
@@ -277,15 +280,5 @@ public static class ServiceCollectionExtensions
         }
 
         return endpoint;
-    }
-
-    private static string NormalizeProvider(string? provider)
-    {
-        var value = string.IsNullOrWhiteSpace(provider) ? "crs" : provider.Trim().ToLowerInvariant();
-        return value switch
-        {
-            "authropic" => "anthropic",
-            _ => value,
-        };
     }
 }

@@ -1,4 +1,6 @@
-﻿using Microsoft.Agents.AI;
+﻿using System.Security.Cryptography;
+using System.Text;
+using Microsoft.Agents.AI;
 using WesleyCode.Agent.Services;
 
 namespace WesleyCode.Agent.Extensions;
@@ -11,7 +13,7 @@ internal static class AgentRunnerExtensions
         this AIAgent agent,
         string input,
         AgentSession session,
-        IOutputCapture? capture = null,
+        IOutputCapture capture,
         CancellationToken cancellationToken = default
     )
     {
@@ -22,7 +24,10 @@ internal static class AgentRunnerExtensions
             await foreach (var agentResponse in agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
             {
                 updates.Add(agentResponse);
-                capture?.WriteTool(agentResponse.Contents, agentResponse.AuthorName);
+                if (agentResponse.Contents.HasToolContent())
+                {
+                    capture.WriteTool(agentResponse.Contents, agentResponse.AuthorName);
+                }
             }
 
             var response = updates.ToAgentResponse();
@@ -33,5 +38,12 @@ internal static class AgentRunnerExtensions
         }
 
         throw new InvalidOperationException("代理连续多次未返回可显示内容,请调整输入后重试。");
+    }
+
+    public static string ComputeMd5(this string target)
+    {
+        using var md5 = MD5.Create();
+        var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(target));
+        return BitConverter.ToString(hash, 4, 8).Replace("-", string.Empty).ToLowerInvariant();
     }
 }
