@@ -34,7 +34,8 @@ internal sealed class SystemPromptProvider : AIContextProvider
     private async Task<string> BuildPromptAsync(CancellationToken cancellationToken = default)
     {
         var builder = new StringBuilder();
-        builder.AppendLine($"你是位于\"{_workDirectory}\"的代理工具;");
+        builder.AppendLine($"当前操作系统是\"{Environment.OSVersion.VersionString}\"");
+        builder.AppendLine($"当前工作目录是\"{_workDirectory}\"");
         foreach (var path in EnumeratePromptFiles())
         {
             _logger.LogDebug("加载提示词文件 `{PromptPath}`", path);

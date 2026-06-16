@@ -35,7 +35,7 @@ internal class ConsoleOutputCapture : IOutputCapture
             }
             else if (content is FunctionResultContent resultContent)
             {
-                WriteToolResult(resultContent.CallId, FormatResult(resultContent.Result?.ToString()));
+                WriteToolResult(resultContent.CallId, FormatResult(resultContent.Exception?.Message ?? resultContent.Result?.ToString()));
             }
         }
     }

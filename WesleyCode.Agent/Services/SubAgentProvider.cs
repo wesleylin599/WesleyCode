@@ -97,7 +97,7 @@ internal sealed class SubAgentProvider : AIContextProvider
                 {
                     ToolMode = ChatToolMode.Auto,
                     Instructions = content.Instructions,
-                    Tools = [ToolManager.CommandFunction],
+                    Tools = ToolManager.AllFunctions,
                     Reasoning = reasoning,
                 },
                 AIContextProviders = _providers,

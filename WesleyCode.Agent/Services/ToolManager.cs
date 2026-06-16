@@ -9,6 +9,7 @@ internal static class ToolManager
 {
     private static readonly List<TaskItem> Tasks = [];
     private static readonly UTF8Encoding Utf8StrictEncoding = new(false, true);
+    private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
 
     static ToolManager()
     {
@@ -23,26 +24,19 @@ internal static class ToolManager
     public static readonly AITool[] AllFunctions = [.. ReadFunctions, UpdateTasksFunction];
 
     [Description("命令行工具,用于执行命令操作")]
-    private static async Task<string> Command([Description("命令")] CommandItem command, CancellationToken cancellationToken = default)
+    private static async Task<string> Command([Description("命令调用模型")] CommandItem model, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(command.FileName))
-        {
-            return "Error: 工具名称为空";
-        }
-
         string output = string.Empty;
-
         try
         {
-            var arguments = command.Arguments ?? [];
-            var timeoutSeconds = command.TimeoutSeconds <= 0 ? 300 : Math.Min(command.TimeoutSeconds, 3600);
+            var timeoutSeconds = model.TimeoutSeconds <= 0 ? 300 : Math.Min(model.TimeoutSeconds, 3600);
             using var standardOutputStream = new MemoryStream();
             using var standardErrorStream = new MemoryStream();
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
-            var cli = Cli.Wrap(command.FileName)
-                .WithArguments(arguments)
+            var cli = Cli.Wrap(FileName)
+                .WithArguments(model.Command ?? string.Empty)
                 .WithWorkingDirectory(Directory.GetCurrentDirectory())
                 .WithStandardOutputPipe(PipeTarget.ToStream(standardOutputStream))
                 .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream))
@@ -156,8 +150,7 @@ internal static class ToolManager
 
     [Description("命令调用模型")]
     private sealed record CommandItem(
-        [Description("工具名称")] string FileName,
-        [Description("工具参数集合")] List<string>? Arguments = null,
+        [Description("命令行")] string? Command = null,
         [Description("执行超时秒数,默认 60 秒,最大 600 秒")] int TimeoutSeconds = 60
     );
 
