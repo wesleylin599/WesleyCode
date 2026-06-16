@@ -8,7 +8,6 @@ namespace WesleyCode.Agent.Services;
 internal sealed class SystemPromptProvider : AIContextProvider
 {
     private const string SystemPromptName = "SYSTEM.md";
-    private const string AgentPromptName = "AGENTS.md";
 
     private readonly string _workDirectory;
     private readonly ILogger<SystemPromptProvider> _logger;
@@ -35,9 +34,7 @@ internal sealed class SystemPromptProvider : AIContextProvider
     private async Task<string> BuildPromptAsync(CancellationToken cancellationToken = default)
     {
         var builder = new StringBuilder();
-        builder.AppendLine($"你是位于\"{_workDirectory}\"的代理工具,使用中文输出;");
-        builder.AppendLine("操作时要求简洁高效,最小改动实现需求;");
-
+        builder.AppendLine($"你是位于\"{_workDirectory}\"的代理工具;");
         foreach (var path in EnumeratePromptFiles())
         {
             _logger.LogDebug("加载提示词文件 `{PromptPath}`", path);
@@ -56,15 +53,6 @@ internal sealed class SystemPromptProvider : AIContextProvider
 
     private IEnumerable<string> EnumeratePromptFiles()
     {
-        foreach (var directory in EnumerateDirectoriesFromRoot(_workDirectory))
-        {
-            var agentsPath = Path.Combine(directory, AgentPromptName);
-            if (File.Exists(agentsPath))
-            {
-                yield return agentsPath;
-            }
-        }
-
         var localSystemPath = Path.Combine(_workDirectory, SystemPromptName);
         if (File.Exists(localSystemPath))
         {
@@ -75,22 +63,6 @@ internal sealed class SystemPromptProvider : AIContextProvider
         if (File.Exists(baseSystemPath) && !string.Equals(baseSystemPath, localSystemPath, StringComparison.OrdinalIgnoreCase))
         {
             yield return baseSystemPath;
-        }
-    }
-
-    private static IEnumerable<string> EnumerateDirectoriesFromRoot(string workDirectory)
-    {
-        var directories = new Stack<string>();
-        DirectoryInfo? current = new(workDirectory);
-        while (current != null)
-        {
-            directories.Push(current.FullName);
-            current = current.Parent;
-        }
-
-        while (directories.Count > 0)
-        {
-            yield return directories.Pop();
         }
     }
 }
