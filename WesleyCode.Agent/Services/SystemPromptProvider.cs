@@ -35,6 +35,7 @@ internal sealed class SystemPromptProvider : AIContextProvider
     {
         var builder = new StringBuilder();
         builder.AppendLine($"当前操作系统是\"{Environment.OSVersion.VersionString}\"");
+        builder.AppendLine($"当前使用的命令行工具是\"{ToolManager.FileName}\"");
         builder.AppendLine($"当前工作目录是\"{_workDirectory}\"");
         foreach (var path in EnumeratePromptFiles())
         {

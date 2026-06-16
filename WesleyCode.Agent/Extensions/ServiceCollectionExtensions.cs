@@ -64,10 +64,8 @@ public static class ServiceCollectionExtensions
             {
                 config.Name = "main";
                 config.Instructions = """
-                你是一个自动化完成任务的智能体;
-                使用工具执行操作完成用户需求;
-                及时使用工具跟踪任务清单;
-                执行完成后输出总结;
+                使用工具完成用户需求,并跟踪任务完成进度
+                执行发生错误时,分析错误原因,修正后重试
                 """;
             });
         services
@@ -264,14 +262,18 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException("未配置 Model Id，请设置 WINTEAM_MODELID。");
         }
         var endpoint = GetEndpoint(options.BaseUrl);
+        if (endpoint is null)
+        {
+            throw new InvalidOperationException("未配置 BaseUrl，请设置 WINTEAM_BASEURL。");
+        }
         return new OllamaApiClient(endpoint, options.ModelId);
     }
 
-    private static Uri GetEndpoint(string? baseUrl)
+    private static Uri? GetEndpoint(string? baseUrl)
     {
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            throw new InvalidOperationException($"BaseUrl 配置为空");
+            return null;
         }
 
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var endpoint))

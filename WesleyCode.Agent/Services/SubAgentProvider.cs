@@ -25,23 +25,27 @@ internal sealed class SubAgentProvider : AIContextProvider
 
     private static readonly AgentContent Planner = new(
         "planner",
-        "规划代理,用于设计实现任务清单,使用示例`use_subAgent(planner,<需求>)`",
+        "规划代理,用于设计任务清单",
         """
-        你是一个规划代理.设计实现任务清单.不要做更改.
-        每个任务需要按顺序且可独立执行.
+        对需求进行分析,设计实现任务清单,不要做更改.
+        任务清单应该是实现需求的必要步骤,每个任务都应该是独立的,并且可以被单独执行的.
         任务的总数不要超过 10 条.
         """,
-        new ReasoningOptions { Output = ReasoningOutput.Summary }
+        [ToolManager.CommandFunction],
+        new ReasoningOptions { Output = ReasoningOutput.Summary },
+        ChatResponseFormat.ForJsonSchema<List<TaskItem>>()
     );
     private static readonly AgentContent Executor = new(
         "executor",
-        "执行代理,用于完成专注任务,使用示例`use_subAgent(executor,<任务描述>)`",
+        "执行代理,用于完成独立任务",
         """
-        你是一个执行代理,使用工具简洁高效地完成任务
-        必要时获取skills中的工具使用,并且合理调用工具完成任务.
-        执行完成后总结做了什么.
+        使用工具简洁高效地完成任务
+        仔细阅读任务描述,如果不清楚任务需求,可以使用工具进行查询,直到完全理解任务需求.
+        执行完成后输出操作总结与执行结论.
         """,
-        new ReasoningOptions { Output = ReasoningOutput.Summary }
+        [ToolManager.CommandFunction],
+        new ReasoningOptions { Output = ReasoningOutput.Summary },
+        ChatResponseFormat.Text
     );
 
     private readonly AITool[] _tools;
@@ -74,7 +78,14 @@ internal sealed class SubAgentProvider : AIContextProvider
         return ValueTask.FromResult(new AIContext { Instructions = instructionPrompt, Tools = _tools });
     }
 
-    private record AgentContent(string Name, string Description, string Instructions, ReasoningOptions? Reasoning = null);
+    private record AgentContent(
+        string Name,
+        string Description,
+        string Instructions,
+        AITool[]? Tools = null,
+        ReasoningOptions? Reasoning = null,
+        ChatResponseFormat? ResponseFormat = null
+    );
 
     private async Task<string> UseSubAgentAsync(
         [Description("子代理名称")] string name,
@@ -87,7 +98,10 @@ internal sealed class SubAgentProvider : AIContextProvider
             return "Error: 未找到该子代理.";
         }
 
+        var tools = content.Tools ?? [];
         var reasoning = content.Reasoning ?? new ReasoningOptions();
+        var responseFormat = content.ResponseFormat ?? ChatResponseFormat.Text;
+
         AIAgent subAgent = _client.AsAIAgent(
             options: new ChatClientAgentOptions
             {
@@ -97,8 +111,9 @@ internal sealed class SubAgentProvider : AIContextProvider
                 {
                     ToolMode = ChatToolMode.Auto,
                     Instructions = content.Instructions,
-                    Tools = ToolManager.AllFunctions,
+                    ResponseFormat = responseFormat,
                     Reasoning = reasoning,
+                    Tools = tools,
                 },
                 AIContextProviders = _providers,
             }

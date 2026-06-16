@@ -5,11 +5,21 @@ using Microsoft.Extensions.AI;
 
 namespace WesleyCode.Agent.Services;
 
+internal sealed record CommandItem(
+    [Description("命令行")] string? Command = null,
+    [Description("执行超时秒数,默认 60 秒,最大 600 秒")] int TimeoutSeconds = 60
+);
+
+internal sealed record TaskItem(
+    [Description("任务序号")] int Num,
+    [Description("任务描述")] string Description,
+    [Description("任务状态")] string? Status = null
+);
+
 internal static class ToolManager
 {
     private static readonly List<TaskItem> Tasks = [];
     private static readonly UTF8Encoding Utf8StrictEncoding = new(false, true);
-    private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
 
     static ToolManager()
     {
@@ -22,21 +32,22 @@ internal static class ToolManager
 
     public static readonly AITool[] ReadFunctions = [CommandFunction, ReadTasksFunction];
     public static readonly AITool[] AllFunctions = [.. ReadFunctions, UpdateTasksFunction];
+    public static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
 
-    [Description("命令行工具,用于执行命令操作")]
-    private static async Task<string> Command([Description("命令调用模型")] CommandItem model, CancellationToken cancellationToken = default)
+    [Description("使用命令行工具执行命令")]
+    private static async Task<string> Command([Description("命令调用模型")] CommandItem item, CancellationToken cancellationToken = default)
     {
         string output = string.Empty;
         try
         {
-            var timeoutSeconds = model.TimeoutSeconds <= 0 ? 300 : Math.Min(model.TimeoutSeconds, 3600);
+            var timeoutSeconds = item.TimeoutSeconds <= 0 ? 300 : Math.Min(item.TimeoutSeconds, 3600);
             using var standardOutputStream = new MemoryStream();
             using var standardErrorStream = new MemoryStream();
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
             var cli = Cli.Wrap(FileName)
-                .WithArguments(model.Command ?? string.Empty)
+                .WithArguments(item.Command ?? string.Empty)
                 .WithWorkingDirectory(Directory.GetCurrentDirectory())
                 .WithStandardOutputPipe(PipeTarget.ToStream(standardOutputStream))
                 .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream))
@@ -56,7 +67,7 @@ internal static class ToolManager
         return output;
     }
 
-    [Description("更新任务清单,调用需要传入完整的工作清单")]
+    [Description("更新任务清单")]
     private static string UpdateTasks([Description("任务清单列表")] List<TaskItem> tasks)
     {
         Tasks.Clear();
@@ -64,10 +75,10 @@ internal static class ToolManager
         stringBuilder.AppendLine($"任务清单已更新,共 {tasks.Count} 条任务");
         foreach (var task in tasks ?? [])
         {
-            if (string.IsNullOrWhiteSpace(task.Num + task.Title))
+            if (string.IsNullOrWhiteSpace(task.Num + task.Description))
                 continue;
             Tasks.Add(task);
-            stringBuilder.AppendLine($"[{task.Status}]{task.Num} {task.Title}");
+            stringBuilder.AppendLine($"[{task.Status ?? "未开始"}]{task.Num} {task.Description}");
         }
         return stringBuilder.ToString();
     }
@@ -147,19 +158,4 @@ internal static class ToolManager
 
         return output.ToString().TrimEnd();
     }
-
-    [Description("命令调用模型")]
-    private sealed record CommandItem(
-        [Description("命令行")] string? Command = null,
-        [Description("执行超时秒数,默认 60 秒,最大 600 秒")] int TimeoutSeconds = 60
-    );
-
-    [Description("任务记录模型")]
-    private sealed record TaskItem(
-        [Description("任务序号")] int Num,
-        [Description("任务标题")] string Title,
-        [Description("任务详情")] string Content,
-        [Description("执行结果")] string Result,
-        [Description("任务状态,只有: 未开始,进行中,已跳过,已完成")] string Status = "未开始"
-    );
 }
