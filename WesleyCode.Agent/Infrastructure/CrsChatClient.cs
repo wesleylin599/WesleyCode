@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Microsoft.Extensions.AI;
 
 namespace WesleyCode.Agent.Infrastructure;
@@ -27,6 +27,28 @@ public sealed class CrsChatClient : DelegatingChatClient
         if (!string.IsNullOrWhiteSpace(options?.Instructions))
         {
             request.Add(new ChatMessage(ChatRole.User, options.Instructions));
+        }
+        if (options is { ResponseFormat: ChatResponseFormatJson formatJson } && formatJson.Schema is not null)
+        {
+            request.Add(
+                new ChatMessage(
+                    ChatRole.User,
+                    $$"""
+                    You must respond with valid JSON only.
+
+                    The JSON must conform to this JSON Schema:
+                    {{formatJson.Schema}}
+
+                    Rules:
+                    - Output JSON only.
+                    - Do not include markdown code fences.
+                    - Do not include explanations.
+                    - Do not include comments.
+                    - Do not omit required fields.
+                    - Use null only when the schema allows null.
+                    """
+                )
+            );
         }
         foreach (var message in messages)
         {
