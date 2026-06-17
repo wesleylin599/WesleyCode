@@ -9,7 +9,6 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OllamaSharp;
@@ -41,23 +40,86 @@ public static class ServiceCollectionExtensions
     public static bool HasToolContent(this IList<AIContent> contents) =>
         contents.Any(static content => content is FunctionCallContent or FunctionResultContent);
 
-    public static IHostApplicationBuilder AddAgentHost(this IHostApplicationBuilder builder, string workDirectory)
+    public static IServiceCollection AddAgentHost(this IServiceCollection services, string workDirectory)
     {
-        builder.Services.AddAgentHost(builder.Configuration, workDirectory);
-        return builder;
+        services.AddSingleton<IDistributedCache>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<CacheOptions>>().Value;
+            var cacheOptions = new MemoryDistributedCacheOptions { SizeLimit = options.SizeLimit };
+            return new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(cacheOptions));
+        });
+
+        services.TryAddSingleton<IOutputCapture, NullOutputCapture>();
+        services.AddSingleton<ISessionStore, SessionStore>();
+        services.AddSingleton<IAgentRunner, AgentRunner>();
+        services.AddAIProviders(workDirectory);
+        services.ConfigOptions();
+        services.AddAIAgent();
+
+        return services;
     }
 
-    public static IServiceCollection AddAgentHost(this IServiceCollection services, IConfiguration configuration, string workDirectory)
+    private static IServiceCollection AddAIProviders(this IServiceCollection services, string workDirectory)
+    {
+        services.AddSingleton<SystemPromptProvider>(provider => new(workDirectory, provider.GetRequiredService<ILoggerFactory>()));
+
+        services.AddSingleton<CompactionProvider>(provider =>
+        {
+            var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
+            var crsClient = provider.GetRequiredService<IChatClient>();
+            var pipeline = new PipelineCompactionStrategy(
+                new ToolResultCompactionStrategy(CompactionTriggers.TokensExceed(compactionOptions.ToolResultTokenLimit)),
+                new SummarizationCompactionStrategy(crsClient, CompactionTriggers.TokensExceed(compactionOptions.SummaryTokenLimit)),
+                new SlidingWindowCompactionStrategy(CompactionTriggers.TurnsExceed(compactionOptions.SlidingWindowTurnLimit)),
+                new TruncationCompactionStrategy(CompactionTriggers.TokensExceed(compactionOptions.TruncationTokenLimit))
+            );
+            return new(pipeline, loggerFactory: provider.GetRequiredService<ILoggerFactory>());
+        });
+
+        services.AddSingleton<AgentSkillsProvider>(provider =>
+        {
+            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+            var systemSkills = Path.Combine(AppContext.BaseDirectory, "skills", "system");
+            var localSkills = Path.Combine(AppContext.BaseDirectory, "skills", "user");
+
+            var defaultInstructions = new StringBuilder(_baseSkillsInstructions);
+            defaultInstructions.AppendLine($"skills 操作目标目录 \"{localSkills}\"");
+
+            return new(
+                skillPaths: [systemSkills, localSkills],
+                options: new AgentSkillsProviderOptions { SkillsInstructionPrompt = defaultInstructions.ToString() },
+                loggerFactory: loggerFactory
+            );
+        });
+
+        services.AddSingleton<SubAgentProvider>(provider =>
+            new(
+                provider.GetRequiredService<IChatClient>(),
+                provider.GetRequiredService<IOutputCapture>(),
+                [
+                    provider.GetRequiredService<CompactionProvider>(),
+                    provider.GetRequiredService<SystemPromptProvider>(),
+                    provider.GetRequiredService<AgentSkillsProvider>(),
+                ],
+                provider.GetRequiredService<ILoggerFactory>()
+            )
+        );
+        return services;
+    }
+
+    private static IServiceCollection ConfigOptions(this IServiceCollection services)
     {
         services
             .AddOptions<ChatClientOptions>()
-            .Configure(config =>
-            {
-                config.Provider = configuration.GetValue<string>("WINTEAM_PROVIDER");
-                config.ModelId = configuration.GetValue<string>("WINTEAM_MODELID");
-                config.BaseUrl = configuration.GetValue<string>("WINTEAM_BASEURL");
-                config.ApiKey = configuration.GetValue<string>("WINTEAM_APIKEY");
-            });
+            .Configure<IConfiguration>(
+                (options, configuration) =>
+                {
+                    options.Provider = configuration.GetValue<string>("WINTEAM_PROVIDER");
+                    options.ModelId = configuration.GetValue<string>("WINTEAM_MODELID");
+                    options.BaseUrl = configuration.GetValue<string>("WINTEAM_BASEURL");
+                    options.ApiKey = configuration.GetValue<string>("WINTEAM_APIKEY");
+                }
+            );
         services
             .AddOptions<AgentOptions>()
             .Configure(config =>
@@ -89,113 +151,55 @@ public static class ServiceCollectionExtensions
             {
                 config.DirectoryName = "session";
             });
+        return services;
+    }
 
-        services.AddSingleton<IChatClient>(provider =>
+    private static IServiceCollection AddAIAgent(this IServiceCollection services)
+    {
+        services.AddChatClient(provider =>
         {
-            var capture = provider.GetRequiredService<IOutputCapture>();
-            var cache = provider.GetRequiredService<IDistributedCache>();
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            var options = provider.GetRequiredService<IOptions<ChatClientOptions>>().Value;
+            var options = provider.GetRequiredService<IOptions<ChatClientOptions>>();
 
-            var client = CreateChatClient(options, loggerFactory);
+            var client = CreateChatClient(options.Value, loggerFactory);
             StringBuilder builder = new StringBuilder();
-            builder.AppendLine($"Provider:{options.Provider}");
-            if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+            builder.AppendLine($"Provider:{options.Value.Provider}");
+            if (!string.IsNullOrWhiteSpace(options.Value.BaseUrl))
             {
-                builder.AppendLine($"BaseUrl:{options.BaseUrl}");
+                builder.AppendLine($"BaseUrl:{options.Value.BaseUrl}");
             }
-            builder.AppendLine($"ModelId:{options.ModelId}");
-            capture.WriteSystemMessage(builder.ToString());
+            builder.AppendLine($"ModelId:{options.Value.ModelId}");
+            provider.GetRequiredService<IOutputCapture>().WriteSystemMessage(builder.ToString());
 
-            return client.AsBuilder().UseDistributedCache(cache).UseLogging(loggerFactory).Build();
-        });
-
-        services.AddSingleton<IDistributedCache>(provider =>
-        {
-            var options = provider.GetRequiredService<IOptions<CacheOptions>>().Value;
-            var cacheOptions = new MemoryDistributedCacheOptions();
-            if (options.SizeLimit > 0)
-            {
-                cacheOptions.SizeLimit = options.SizeLimit;
-            }
-            return new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(cacheOptions));
-        });
-
-        services.AddSingleton<CompactionProvider>(provider =>
-        {
-            var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
-            var crsClient = provider.GetRequiredService<IChatClient>();
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            var pipeline = new PipelineCompactionStrategy(
-                new ToolResultCompactionStrategy(CompactionTriggers.TokensExceed(compactionOptions.ToolResultTokenLimit)),
-                new SummarizationCompactionStrategy(crsClient, CompactionTriggers.TokensExceed(compactionOptions.SummaryTokenLimit)),
-                new SlidingWindowCompactionStrategy(CompactionTriggers.TurnsExceed(compactionOptions.SlidingWindowTurnLimit)),
-                new TruncationCompactionStrategy(CompactionTriggers.TokensExceed(compactionOptions.TruncationTokenLimit))
-            );
-            return new CompactionProvider(pipeline, loggerFactory: loggerFactory);
-        });
-
-        services.AddSingleton<AgentSkillsProvider>(provider =>
-        {
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            var systemSkills = Path.Combine(AppContext.BaseDirectory, "skills", "system");
-            var localSkills = Path.Combine(AppContext.BaseDirectory, "skills", "user");
-
-            var defaultInstructions = new StringBuilder(_baseSkillsInstructions);
-            defaultInstructions.AppendLine($"skills 操作目标目录 \"{localSkills}\"");
-
-            return new AgentSkillsProvider(
-                skillPaths: [systemSkills, localSkills],
-                options: new AgentSkillsProviderOptions { SkillsInstructionPrompt = defaultInstructions.ToString() },
-                loggerFactory: loggerFactory
-            );
-        });
-
-        services.AddSingleton<SystemPromptProvider>(provider =>
-        {
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            return new SystemPromptProvider(workDirectory, loggerFactory);
-        });
-
-        services.AddSingleton<SubAgentProvider>(provider =>
-        {
-            var crsClient = provider.GetRequiredService<IChatClient>();
-            var capture = provider.GetRequiredService<IOutputCapture>();
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            var compactionProvider = provider.GetRequiredService<CompactionProvider>();
-            var promptProvider = provider.GetRequiredService<SystemPromptProvider>();
-            var skillsProvider = provider.GetRequiredService<AgentSkillsProvider>();
-            return new SubAgentProvider(crsClient, capture, [compactionProvider, promptProvider, skillsProvider], loggerFactory);
+            return client.AsBuilder().UseDistributedCache(provider.GetRequiredService<IDistributedCache>()).UseLogging(loggerFactory).Build();
         });
 
         services.AddSingleton<AIAgent>(provider =>
         {
-            var options = provider.GetRequiredService<IOptions<AgentOptions>>().Value;
-            var compactionProvider = provider.GetRequiredService<CompactionProvider>();
-            var promptProvider = provider.GetRequiredService<SystemPromptProvider>();
-            var skillsProvider = provider.GetRequiredService<AgentSkillsProvider>();
-            var agentProvider = provider.GetRequiredService<SubAgentProvider>();
-            var chatClient = provider.GetRequiredService<IChatClient>();
-            return chatClient.AsAIAgent(
-                options: new ChatClientAgentOptions
-                {
-                    Name = options.Name,
-                    ChatOptions = new ChatOptions
+            var options = provider.GetRequiredService<IOptions<AgentOptions>>();
+            return provider
+                .GetRequiredService<IChatClient>()
+                .AsAIAgent(
+                    options: new ChatClientAgentOptions
                     {
-                        Reasoning = new ReasoningOptions { Output = ReasoningOutput.Summary },
-                        Instructions = options.Instructions,
-                        Tools = ToolManager.AllFunctions,
-                        ToolMode = ChatToolMode.Auto,
-                    },
-                    AIContextProviders = [compactionProvider, promptProvider, skillsProvider, agentProvider],
-                }
-            );
+                        Name = options.Value.Name,
+                        ChatOptions = new ChatOptions
+                        {
+                            Reasoning = new ReasoningOptions { Output = ReasoningOutput.Summary },
+                            Instructions = options.Value.Instructions,
+                            Tools = ToolManager.AllFunctions,
+                            ToolMode = ChatToolMode.Auto,
+                        },
+                        AIContextProviders =
+                        [
+                            provider.GetRequiredService<CompactionProvider>(),
+                            provider.GetRequiredService<SystemPromptProvider>(),
+                            provider.GetRequiredService<AgentSkillsProvider>(),
+                            provider.GetRequiredService<SubAgentProvider>(),
+                        ],
+                    }
+                );
         });
-
-        services.TryAddSingleton<IOutputCapture, NullOutputCapture>();
-        services.AddSingleton<ISessionStore, SessionStore>();
-        services.AddSingleton<IAgentRunner, AgentRunner>();
-
         return services;
     }
 
