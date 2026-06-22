@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics;
 using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Options;
@@ -151,13 +150,8 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     var stopwatch = Stopwatch.StartNew();
                     var response = await _agentRunner.ExecuteAsync(input, session, source.Token);
                     stopwatch.Stop();
-                    foreach (var message in response.Messages)
-                    {
-                        if (message.Role == ChatRole.Assistant && !message.Contents.HasToolContent())
-                        {
-                            _outputCapture.WriteAgentMessage(message.Text);
-                        }
-                    }
+                    var message = response.Messages.LastOrDefault(msg => !msg.Contents.HasToolContent());
+                    _outputCapture.WriteAgentMessage(message?.Text ?? "not selected");
                     _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
                     MarkSessionDirty();
                 }

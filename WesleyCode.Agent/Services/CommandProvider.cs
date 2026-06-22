@@ -1,40 +1,36 @@
 ﻿using System.ComponentModel;
 using System.Text;
+using System.Text.Json.Serialization;
 using CliWrap;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
 namespace WesleyCode.Agent.Services;
 
-internal sealed record CommandItem(
-    [Description("命令行")] string? Command = null,
-    [Description("执行超时秒数,默认 60 秒,最大 600 秒")] int TimeoutSeconds = 60
-);
-
-internal sealed record TaskItem(
-    [Description("任务序号")] int Num,
-    [Description("任务描述")] string Description,
-    [Description("任务状态")] string? Status = null
-);
-
-internal static class ToolManager
+internal sealed class CommandProvider : AIContextProvider
 {
-    private static readonly List<TaskItem> Tasks = [];
     private static readonly UTF8Encoding Utf8StrictEncoding = new(false, true);
+    private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
 
-    static ToolManager()
+    static CommandProvider()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 
-    public static readonly AITool CommandFunction = AIFunctionFactory.Create(Command);
-    public static readonly AITool ReadTasksFunction = AIFunctionFactory.Create(ReadTasks);
-    public static readonly AITool UpdateTasksFunction = AIFunctionFactory.Create(UpdateTasks);
+    protected override ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
+    {
+        return ValueTask.FromResult(
+            new AIContext
+            {
+                Instructions = $"""
+                当前使用的命令行工具是`{FileName}`
+                使用`run_command`来调用命令行工具执行命令
+                """,
+                Tools = [AIFunctionFactory.Create(Command, new AIFunctionFactoryOptions { Name = "run_command", Description = "执行命令行" })],
+            }
+        );
+    }
 
-    public static readonly AITool[] ReadFunctions = [CommandFunction, ReadTasksFunction];
-    public static readonly AITool[] AllFunctions = [.. ReadFunctions, UpdateTasksFunction];
-    public static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
-
-    [Description("使用命令行工具执行命令")]
     private static async Task<string> Command([Description("命令调用模型")] CommandItem item, CancellationToken cancellationToken = default)
     {
         string output = string.Empty;
@@ -66,25 +62,6 @@ internal static class ToolManager
 
         return output;
     }
-
-    [Description("更新任务清单")]
-    private static string UpdateTasks([Description("任务清单列表")] List<TaskItem> tasks)
-    {
-        Tasks.Clear();
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.AppendLine($"任务清单已更新,共 {tasks.Count} 条任务");
-        foreach (var task in tasks ?? [])
-        {
-            if (string.IsNullOrWhiteSpace(task.Num + task.Description))
-                continue;
-            Tasks.Add(task);
-            stringBuilder.AppendLine($"[{task.Status ?? "未开始"}]{task.Num} {task.Description}");
-        }
-        return stringBuilder.ToString();
-    }
-
-    [Description("获取一条未开始的任务")]
-    private static List<TaskItem> ReadTasks() => Tasks.OrderBy(x => x.Num).ToList();
 
     private static string DecodeCommandOutput(byte[] buffer)
     {
@@ -158,4 +135,13 @@ internal static class ToolManager
 
         return output.ToString().TrimEnd();
     }
+}
+
+public sealed class CommandItem
+{
+    [JsonPropertyName("command")]
+    public string Command { get; set; } = string.Empty;
+
+    [JsonPropertyName("timeout")]
+    public int TimeoutSeconds { get; set; }
 }

@@ -21,22 +21,6 @@ namespace WesleyCode.Agent.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    private const string _baseSkillsInstructions = """
-        You have access to skills containing domain-specific knowledge and capabilities.
-        Each skill provides specialized instructions, reference documents, and assets for specific tasks.
-
-        <available_skills>
-        {{skills}}
-        </available_skills>
-
-        When a task aligns with a skill's domain, follow these steps in exact order:
-        - Use `load_skill` to retrieve the skill's instructions.
-        - Follow the provided guidance.
-        {{resource_instructions}}
-        {{script_instructions}}
-        Only load what is needed, when it is needed.
-        """;
-
     public static bool HasToolContent(this IList<AIContent> contents) =>
         contents.Any(static content => content is FunctionCallContent or FunctionResultContent);
 
@@ -61,49 +45,38 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAIProviders(this IServiceCollection services, string workDirectory)
     {
-        services.AddSingleton<SystemPromptProvider>(provider => new(workDirectory, provider.GetRequiredService<ILoggerFactory>()));
+        services.AddSingleton<AIContextProvider, TodoProvider>();
 
-        services.AddSingleton<CompactionProvider>(provider =>
+        services.AddSingleton<AIContextProvider, CommandProvider>();
+
+        services.AddSingleton<AIContextProvider, AgentModeProvider>();
+
+        services.AddSingleton<AIContextProvider>(provider => new FileMemoryProvider(new InMemoryAgentFileStore()));
+
+        services.AddSingleton<AIContextProvider>(provider => new FileAccessProvider(new FileSystemAgentFileStore(workDirectory)));
+
+        services.AddSingleton<AIContextProvider>(provider => new SystemPromptProvider(workDirectory, provider.GetRequiredService<ILoggerFactory>()));
+
+        services.AddSingleton<AIContextProvider>(provider => new AgentSkillsProvider(
+            skillPaths: [Path.Combine(AppContext.BaseDirectory, "skills", "system"), Path.Combine(AppContext.BaseDirectory, "skills", "user")],
+            loggerFactory: provider.GetRequiredService<ILoggerFactory>()
+        ));
+
+        services.AddSingleton<AIContextProvider>(provider =>
         {
             var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
-            var crsClient = provider.GetRequiredService<IChatClient>();
             var pipeline = new PipelineCompactionStrategy(
-                new ToolResultCompactionStrategy(CompactionTriggers.TokensExceed(compactionOptions.ToolResultTokenLimit)),
-                new SummarizationCompactionStrategy(crsClient, CompactionTriggers.TokensExceed(compactionOptions.SummaryTokenLimit)),
+                new ToolResultCompactionStrategy(CompactionTriggers.MessagesExceed(compactionOptions.ToolResultMessageLimit)),
+                new SummarizationCompactionStrategy(
+                    provider.GetRequiredService<IChatClient>(),
+                    CompactionTriggers.TokensExceed(compactionOptions.SummaryTokenLimit)
+                ),
                 new SlidingWindowCompactionStrategy(CompactionTriggers.TurnsExceed(compactionOptions.SlidingWindowTurnLimit)),
-                new TruncationCompactionStrategy(CompactionTriggers.TokensExceed(compactionOptions.TruncationTokenLimit))
+                new TruncationCompactionStrategy(CompactionTriggers.GroupsExceed(compactionOptions.TruncationGroupsLimit))
             );
-            return new(pipeline, loggerFactory: provider.GetRequiredService<ILoggerFactory>());
+            return new CompactionProvider(pipeline, loggerFactory: provider.GetRequiredService<ILoggerFactory>());
         });
 
-        services.AddSingleton<AgentSkillsProvider>(provider =>
-        {
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            var systemSkills = Path.Combine(AppContext.BaseDirectory, "skills", "system");
-            var localSkills = Path.Combine(AppContext.BaseDirectory, "skills", "user");
-
-            var defaultInstructions = new StringBuilder(_baseSkillsInstructions);
-            defaultInstructions.AppendLine($"skills 操作目标目录 \"{localSkills}\"");
-
-            return new(
-                skillPaths: [systemSkills, localSkills],
-                options: new AgentSkillsProviderOptions { SkillsInstructionPrompt = defaultInstructions.ToString() },
-                loggerFactory: loggerFactory
-            );
-        });
-
-        services.AddSingleton<SubAgentProvider>(provider =>
-            new(
-                provider.GetRequiredService<IChatClient>(),
-                provider.GetRequiredService<IOutputCapture>(),
-                [
-                    provider.GetRequiredService<CompactionProvider>(),
-                    provider.GetRequiredService<SystemPromptProvider>(),
-                    provider.GetRequiredService<AgentSkillsProvider>(),
-                ],
-                provider.GetRequiredService<ILoggerFactory>()
-            )
-        );
         return services;
     }
 
@@ -125,10 +98,7 @@ public static class ServiceCollectionExtensions
             .Configure(config =>
             {
                 config.Name = "main";
-                config.Instructions = """
-                使用工具完成用户需求,并跟踪任务完成进度
-                执行发生错误时,分析错误原因,修正后重试
-                """;
+                config.Instructions = "使用工具完成用户需求";
             });
         services
             .AddOptions<CacheOptions>()
@@ -140,10 +110,10 @@ public static class ServiceCollectionExtensions
             .AddOptions<CompactionOptions>()
             .Configure(config =>
             {
-                config.ToolResultTokenLimit = 1500;
-                config.SummaryTokenLimit = 10000;
+                config.ToolResultMessageLimit = 7;
+                config.SummaryTokenLimit = 3000;
                 config.SlidingWindowTurnLimit = 10;
-                config.TruncationTokenLimit = 30000;
+                config.TruncationGroupsLimit = 12;
             });
         services
             .AddOptions<SessionOptions>()
@@ -183,20 +153,8 @@ public static class ServiceCollectionExtensions
                     options: new ChatClientAgentOptions
                     {
                         Name = options.Value.Name,
-                        ChatOptions = new ChatOptions
-                        {
-                            Reasoning = new ReasoningOptions { Output = ReasoningOutput.Summary },
-                            Instructions = options.Value.Instructions,
-                            Tools = ToolManager.AllFunctions,
-                            ToolMode = ChatToolMode.Auto,
-                        },
-                        AIContextProviders =
-                        [
-                            provider.GetRequiredService<CompactionProvider>(),
-                            provider.GetRequiredService<SystemPromptProvider>(),
-                            provider.GetRequiredService<AgentSkillsProvider>(),
-                            provider.GetRequiredService<SubAgentProvider>(),
-                        ],
+                        ChatOptions = new ChatOptions { Instructions = options.Value.Instructions },
+                        AIContextProviders = provider.GetServices<AIContextProvider>(),
                     }
                 );
         });
