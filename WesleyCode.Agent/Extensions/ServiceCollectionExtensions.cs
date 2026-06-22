@@ -45,8 +45,6 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAIProviders(this IServiceCollection services, string workDirectory)
     {
-        services.AddSingleton<AIContextProvider, TodoProvider>();
-
         services.AddSingleton<AIContextProvider, CommandProvider>();
 
         services.AddSingleton<AIContextProvider, AgentModeProvider>();
@@ -54,6 +52,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AIContextProvider>(provider => new FileMemoryProvider(new InMemoryAgentFileStore()));
 
         services.AddSingleton<AIContextProvider>(provider => new FileAccessProvider(new FileSystemAgentFileStore(workDirectory)));
+
+        services.AddSingleton<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
         services.AddSingleton<AIContextProvider>(provider => new SystemPromptProvider(workDirectory, provider.GetRequiredService<ILoggerFactory>()));
 

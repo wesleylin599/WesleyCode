@@ -145,14 +145,12 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
 
                 using var source = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                 var cancelTask = CancelAgentAsync(source);
+                var stopwatch = Stopwatch.StartNew();
                 try
                 {
-                    var stopwatch = Stopwatch.StartNew();
                     var response = await _agentRunner.ExecuteAsync(input, session, source.Token);
-                    stopwatch.Stop();
                     var message = response.Messages.LastOrDefault(msg => !msg.Contents.HasToolContent());
                     _outputCapture.WriteAgentMessage(message?.Text ?? "not selected");
-                    _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
                     MarkSessionDirty();
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)
@@ -164,6 +162,8 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     source.Cancel();
                     await cancelTask;
                 }
+                stopwatch.Stop();
+                _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
             }
             catch (Exception ex)
             {
