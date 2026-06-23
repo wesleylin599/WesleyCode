@@ -11,13 +11,12 @@ namespace WesleyCode.Agent.Services;
 
 internal sealed class CommandProvider : AIContextProvider
 {
-    private static readonly Encoding[] CommonEncodings;
+    private static readonly UTF8Encoding Utf8StrictEncoding = new(false, true);
     private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
 
     static CommandProvider()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        CommonEncodings = [new UTF8Encoding(false, true), Console.OutputEncoding, Encoding.UTF8, Encoding.Default, Encoding.GetEncoding("GB18030")];
     }
 
     private readonly IOptions<WorkingOptions> _options;
@@ -83,7 +82,7 @@ internal sealed class CommandProvider : AIContextProvider
             return string.Empty;
         }
 
-        foreach (var encoding in CommonEncodings)
+        foreach (var encoding in GetCommandOutputEncodings())
         {
             if (TryDecode(buffer, encoding, out var text))
             {
@@ -92,6 +91,22 @@ internal sealed class CommandProvider : AIContextProvider
         }
 
         return Encoding.Default.GetString(buffer);
+    }
+
+    private static IEnumerable<Encoding> GetCommandOutputEncodings()
+    {
+        var codePages = new HashSet<int>();
+
+        yield return Utf8StrictEncoding;
+        codePages.Add(Encoding.UTF8.CodePage);
+
+        foreach (var encoding in new[] { Console.OutputEncoding, Encoding.Default, Encoding.GetEncoding("GB18030") })
+        {
+            if (codePages.Add(encoding.CodePage))
+            {
+                yield return Encoding.GetEncoding(encoding.CodePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
+            }
+        }
     }
 
     private static bool TryDecode(byte[] buffer, Encoding encoding, out string text)
