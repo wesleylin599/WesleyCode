@@ -11,19 +11,13 @@ namespace WesleyCode.Agent.Services;
 
 internal sealed class CommandProvider : AIContextProvider
 {
+    private static readonly Encoding[] CommonEncodings;
     private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
-    private static readonly Encoding[] CommonEncodings =
-    [
-        new UTF8Encoding(false, true),
-        Console.OutputEncoding,
-        Encoding.UTF8,
-        Encoding.Default,
-        Encoding.GetEncoding("GB18030"),
-    ];
 
     static CommandProvider()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        CommonEncodings = [new UTF8Encoding(false, true), Console.OutputEncoding, Encoding.UTF8, Encoding.Default, Encoding.GetEncoding("GB18030")];
     }
 
     private readonly IOptions<WorkingOptions> _options;
