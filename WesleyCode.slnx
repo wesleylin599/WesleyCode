@@ -1,12 +1,9 @@
 <Solution>
-    <Folder Name="/docs/">
-        <File Path="docs\skills-structure.md" />
-        <File Path="docs\subtitle-audio-acquisition.md" />
-    </Folder>
     <Folder Name="/Solution Items/">
         <File Path=".editorconfig" />
         <File Path=".gitattributes" />
         <File Path=".gitignore" />
+        <File Path="README.md" />
     </Folder>
     <Project Path="WesleyCode.Agent\WesleyCode.Agent.csproj" />
     <Project Path="WesleyCode.Console\WesleyCode.Console.csproj" />

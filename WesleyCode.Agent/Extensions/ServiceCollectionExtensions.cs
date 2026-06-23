@@ -48,13 +48,14 @@ public static class ServiceCollectionExtensions
             .Configure(config =>
             {
                 config.Name = "main";
-                config.Instructions = "使用工具完成用户需求";
+                config.Description = "核心智能体";
+                config.Instructions = "调用工具高效完成用户需求,完成后进行校验";
             });
         services
             .AddOptions<CacheOptions>()
             .Configure(config =>
             {
-                config.SizeLimit = 1024;
+                config.SizeLimit = 1024 * 1024;
             });
         services
             .AddOptions<CompactionOptions>()
@@ -148,7 +149,12 @@ public static class ServiceCollectionExtensions
             builder.AppendLine($"ModelId:{options.Value.ModelId}");
             provider.GetRequiredService<IOutputCapture>().WriteSystemMessage(builder.ToString());
 
-            return client.AsBuilder().UseDistributedCache(provider.GetRequiredService<IDistributedCache>()).UseLogging(loggerFactory).Build();
+            return client
+                .AsBuilder()
+                .UseFunctionInvocation()
+                .UseDistributedCache(provider.GetRequiredService<IDistributedCache>())
+                .UseLogging(loggerFactory)
+                .Build();
         });
 
         services.AddSingleton<AIAgent>(provider =>
@@ -160,6 +166,7 @@ public static class ServiceCollectionExtensions
                     options: new ChatClientAgentOptions
                     {
                         Name = options.Value.Name,
+                        Description = options.Value.Description,
                         ChatOptions = new ChatOptions { Instructions = options.Value.Instructions },
                         AIContextProviders = provider.GetServices<AIContextProvider>(),
                     }

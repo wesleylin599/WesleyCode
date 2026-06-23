@@ -2,6 +2,9 @@
 
 public sealed class AgentOptions
 {
-    public string Name { get; set; } = "main";
-    public string Instructions { get; set; } = "使用工具完成用户需求";
+    public string Name { get; set; } = string.Empty;
+
+    public string Description { get; set; } = string.Empty;
+
+    public string Instructions { get; set; } = string.Empty;
 }

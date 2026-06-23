@@ -17,11 +17,11 @@ internal static class AgentRunnerExtensions
         CancellationToken cancellationToken = default
     )
     {
-        var updates = new List<AgentResponseUpdate>();
+        var options = new AgentRunOptions { AllowBackgroundResponses = true };
         for (var attempt = 0; attempt < MaxEmptyResponseRetries; attempt++)
         {
-            updates.Clear();
-            await foreach (var agentResponse in agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
+            var updates = new List<AgentResponseUpdate>();
+            await foreach (var agentResponse in agent.RunStreamingAsync(input, session, options, cancellationToken))
             {
                 updates.Add(agentResponse);
                 if (agentResponse.Contents.HasToolContent())

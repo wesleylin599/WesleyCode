@@ -62,7 +62,7 @@ internal class ConsoleOutputCapture : IOutputCapture
     private static string FormatToolArguments(IDictionary<string, object?>? arguments)
     {
         return arguments is { Count: > 0 }
-            ? string.Join(Environment.NewLine, arguments.Select(static item => $"{item.Key}: {item.Value}"))
+            ? string.Join(Environment.NewLine, arguments.Select(static item => $"{item.Key}:{Environment.NewLine}{item.Value}"))
             : "(no args)";
     }
 

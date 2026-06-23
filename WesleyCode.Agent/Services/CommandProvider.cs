@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Serialization;
 using CliWrap;
@@ -121,6 +122,8 @@ internal sealed class CommandProvider : AIContextProvider
         }
     }
 
+    private const int MaxOutputSize = 1024 * 1024; // 1MB
+
     private static string FormatCommandResult(int exitCode, string standardOutput, string standardError)
     {
         var output = new StringBuilder();
@@ -129,13 +132,16 @@ internal sealed class CommandProvider : AIContextProvider
         if (!string.IsNullOrWhiteSpace(standardOutput))
         {
             output.AppendLine("stdout:");
-            output.AppendLine(standardOutput.TrimEnd());
+            // 添加输出大小限制
+            var truncatedOutput = TruncateOutput(standardOutput.TrimEnd(), MaxOutputSize);
+            output.AppendLine(truncatedOutput);
         }
 
         if (!string.IsNullOrWhiteSpace(standardError))
         {
             output.AppendLine("stderr:");
-            output.AppendLine(standardError.TrimEnd());
+            var truncatedError = TruncateOutput(standardError.TrimEnd(), MaxOutputSize);
+            output.AppendLine(truncatedError);
         }
 
         if (string.IsNullOrWhiteSpace(standardOutput) && string.IsNullOrWhiteSpace(standardError))
@@ -144,6 +150,15 @@ internal sealed class CommandProvider : AIContextProvider
         }
 
         return output.ToString().TrimEnd();
+    }
+
+    private static string TruncateOutput(string input, int maxSize)
+    {
+        if (string.IsNullOrEmpty(input) || input.Length <= maxSize)
+            return input;
+
+        // 截断并添加提示信息
+        return input.Substring(0, maxSize - 20) + "\n[输出被截断，内容过长]";
     }
 }
 
