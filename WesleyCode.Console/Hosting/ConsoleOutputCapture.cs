@@ -43,7 +43,7 @@ internal class ConsoleOutputCapture : IOutputCapture
             }
             else if (content is FunctionResultContent resultContent)
             {
-                WriteToolResult(resultContent.CallId, resultContent.Exception ?? resultContent.Result);
+                WriteToolResult(resultContent.CallId, resultContent.Exception?.Message ?? resultContent.Result?.ToString());
             }
         }
     }
@@ -51,8 +51,8 @@ internal class ConsoleOutputCapture : IOutputCapture
     private void WriteToolCall(string callId, string target, string toolName, string arguments) =>
         WriteBlock($"[{callId}] {target}:{toolName}", arguments, ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
 
-    private void WriteToolResult(string callId, object? result) =>
-        WriteBlock($"[{callId}] Tool Result", TruncateLine(result), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
+    private void WriteToolResult(string callId, string? message) =>
+        WriteBlock($"[{callId}] Tool Result", TruncateLine(message), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
     private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)
     {
@@ -92,20 +92,19 @@ internal class ConsoleOutputCapture : IOutputCapture
         }
     }
 
-    private static string TruncateLine(object? result)
+    private static string TruncateLine(string? message)
     {
-        if (result == null)
+        if (string.IsNullOrEmpty(message))
             return "null";
 
         var isTruncated = false;
         var output = new StringBuilder();
-        var lines = JsonSerializer
-            .Serialize(result, _options)
-            .Split(Environment.NewLine, StringSplitOptions.None)
-            .Where(static item => !string.IsNullOrEmpty(item))
-            .ToList();
+        var lines = message.Split(["\r\n", "\n"], StringSplitOptions.None).ToList();
         for (var index = 0; index < lines.Count; index++)
         {
+            var item = lines[index];
+            if (string.IsNullOrEmpty(item))
+                continue;
             if (lines.Count > MaxLogLine && index > MaxLogLine / 2 && index < lines.Count - MaxLogLine / 2)
             {
                 if (!isTruncated)
@@ -115,11 +114,11 @@ internal class ConsoleOutputCapture : IOutputCapture
                 }
                 continue;
             }
-            output.AppendLine(lines[index]);
+            output.AppendLine(item);
         }
 
         return output.Length > MaxLogLength
-            ? output.ToString().TrimEnd().Substring(0, MaxLogLength) + Environment.NewLine + "[输出被截断，内容过长]"
+            ? output.ToString().TrimEnd().Substring(0, MaxLogLength - 20) + Environment.NewLine + "[输出被截断，内容过长]"
             : output.ToString().TrimEnd();
     }
 }

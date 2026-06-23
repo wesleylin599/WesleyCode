@@ -96,10 +96,6 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
-        services.AddSingleton<AIContextProvider>(provider => new FileMemoryProvider(
-            new FileSystemAgentFileStore(Path.Combine(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath, ".cache"))
-        ));
-
         services.AddSingleton<AIContextProvider>(provider => new FileAccessProvider(
             new FileSystemAgentFileStore(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath)
         ));
