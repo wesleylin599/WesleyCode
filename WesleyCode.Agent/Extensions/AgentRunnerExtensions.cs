@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+﻿using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Agents.AI;
 using WesleyCode.Agent.Services;
@@ -8,6 +9,22 @@ namespace WesleyCode.Agent.Extensions;
 internal static class AgentRunnerExtensions
 {
     private const int MaxEmptyResponseRetries = 8;
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> WriteToolContentAsync(
+        this IAsyncEnumerable<AgentResponseUpdate> updates,
+        IOutputCapture capture,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        await foreach (var agentResponse in updates)
+        {
+            if (agentResponse.Contents.HasToolContent())
+            {
+                capture.WriteTool(agentResponse.Contents, agentResponse.AuthorName);
+            }
+            yield return agentResponse;
+        }
+    }
 
     public static async Task<AgentResponse> ExecuteAsync(
         this AIAgent agent,
@@ -20,17 +37,10 @@ internal static class AgentRunnerExtensions
         var options = new AgentRunOptions { AllowBackgroundResponses = true };
         for (var attempt = 0; attempt < MaxEmptyResponseRetries; attempt++)
         {
-            var updates = new List<AgentResponseUpdate>();
-            await foreach (var agentResponse in agent.RunStreamingAsync(input, session, options, cancellationToken))
-            {
-                updates.Add(agentResponse);
-                if (agentResponse.Contents.HasToolContent())
-                {
-                    capture.WriteTool(agentResponse.Contents, agentResponse.AuthorName);
-                }
-            }
-
-            var response = updates.ToAgentResponse();
+            var response = await agent
+                .RunStreamingAsync(input, session, options, cancellationToken)
+                .WriteToolContentAsync(capture, cancellationToken)
+                .ToAgentResponseAsync(cancellationToken);
             if (!string.IsNullOrWhiteSpace(response.Text))
             {
                 return response;

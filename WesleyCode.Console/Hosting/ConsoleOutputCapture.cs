@@ -1,5 +1,7 @@
-﻿using System.Text;
+﻿using System.Text.Encodings.Web;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
+using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Services;
 
 namespace WesleyCode.Console.Hosting;
@@ -7,7 +9,13 @@ namespace WesleyCode.Console.Hosting;
 internal class ConsoleOutputCapture : IOutputCapture
 {
     private const int MaxLogLine = 10;
-    private const int MaxLogLength = 1000;
+    private const int MaxLogLength = 1024;
+
+    private static readonly JsonSerializerOptions _options = new JsonSerializerOptions
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
 
     public void WritePrompt()
     {
@@ -35,7 +43,7 @@ internal class ConsoleOutputCapture : IOutputCapture
             }
             else if (content is FunctionResultContent resultContent)
             {
-                WriteToolResult(resultContent.CallId, FormatResult(resultContent.Exception?.Message ?? resultContent.Result?.ToString()));
+                WriteToolResult(resultContent.CallId, resultContent.Exception?.Message ?? resultContent.Result?.ToString() ?? string.Empty);
             }
         }
     }
@@ -44,7 +52,12 @@ internal class ConsoleOutputCapture : IOutputCapture
         WriteBlock($"[{callId}] {target}:{toolName}", arguments, ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
 
     private void WriteToolResult(string callId, string message) =>
-        WriteBlock($"[{callId}] Tool Result", message, ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
+        WriteBlock(
+            $"[{callId}] Tool Result",
+            message.TruncateLine(MaxLogLine).TruncateOutput(MaxLogLength),
+            ConsoleColor.DarkBlue,
+            ConsoleColor.DarkGray
+        );
 
     private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)
     {
@@ -61,9 +74,12 @@ internal class ConsoleOutputCapture : IOutputCapture
 
     private static string FormatToolArguments(IDictionary<string, object?>? arguments)
     {
-        return arguments is { Count: > 0 }
-            ? string.Join(Environment.NewLine, arguments.Select(static item => $"{item.Key}:{Environment.NewLine}{item.Value}"))
-            : "(no args)";
+        if (arguments is not { Count: > 0 })
+        {
+            return "(no args)";
+        }
+
+        return JsonSerializer.Serialize(arguments, _options).TruncateLine(MaxLogLine).TruncateOutput(MaxLogLength);
     }
 
     private static IEnumerable<string> Normalize(string? message)
@@ -79,37 +95,5 @@ internal class ConsoleOutputCapture : IOutputCapture
         {
             yield return line;
         }
-    }
-
-    private static string FormatResult(string? result)
-    {
-        if (string.IsNullOrEmpty(result))
-        {
-            return "null";
-        }
-
-        var isTruncated = false;
-        var output = new StringBuilder();
-        var lines = result.Split(["\r\n", "\n"], StringSplitOptions.None).Where(static item => !string.IsNullOrEmpty(item)).ToList();
-        for (var index = 0; index < lines.Count; index++)
-        {
-            if (lines.Count > MaxLogLine && index > MaxLogLine / 2 && index < lines.Count - MaxLogLine / 2)
-            {
-                if (!isTruncated)
-                {
-                    output.AppendLine("{ truncated }");
-                    isTruncated = true;
-                }
-
-                continue;
-            }
-
-            output.AppendLine(lines[index]);
-        }
-
-        if (output.Length > MaxLogLength)
-            return output.ToString()[..MaxLogLength] + "......";
-
-        return output.ToString();
     }
 }

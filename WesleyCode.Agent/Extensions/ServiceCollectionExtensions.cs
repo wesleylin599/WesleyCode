@@ -21,6 +21,41 @@ namespace WesleyCode.Agent.Extensions;
 
 public static class ServiceCollectionExtensions
 {
+    public static string TruncateLine(this string input, int maxLine)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        var isTruncated = false;
+        var output = new StringBuilder();
+        var lines = input.Split(Environment.NewLine, StringSplitOptions.None).Where(static item => !string.IsNullOrEmpty(item)).ToList();
+        for (var index = 0; index < lines.Count; index++)
+        {
+            if (lines.Count > maxLine && index > maxLine / 2 && index < lines.Count - maxLine / 2)
+            {
+                if (!isTruncated)
+                {
+                    output.AppendLine("[输出被折叠，行数过多]");
+                    isTruncated = true;
+                }
+
+                continue;
+            }
+
+            output.AppendLine(lines[index]);
+        }
+
+        return output.ToString().TrimEnd();
+    }
+
+    public static string TruncateOutput(this string input, int maxSize)
+    {
+        if (string.IsNullOrEmpty(input) || input.Length <= maxSize)
+            return input;
+
+        return input.Substring(0, maxSize - 20) + Environment.NewLine + "[输出被截断，内容过长]";
+    }
+
     public static bool HasToolContent(this IList<AIContent> contents) =>
         contents.Any(static content => content is FunctionCallContent or FunctionResultContent);
 
