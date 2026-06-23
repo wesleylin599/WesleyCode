@@ -74,7 +74,7 @@ internal class ConsoleOutputCapture : IOutputCapture
             return "(no args)";
         }
 
-        return JsonSerializer.Serialize(arguments, _options);
+        return TruncateLine(JsonSerializer.Serialize(arguments, _options));
     }
 
     private static IEnumerable<string> Normalize(string? message)
