@@ -9,7 +9,7 @@ namespace WesleyCode.Console.Hosting;
 internal class ConsoleOutputCapture : IOutputCapture
 {
     private const int MaxLogLine = 10;
-    private const int MaxLogLength = 1024;
+    private const int MaxLogLength = 256;
 
     private static readonly JsonSerializerOptions _options = new JsonSerializerOptions
     {
@@ -43,7 +43,7 @@ internal class ConsoleOutputCapture : IOutputCapture
             }
             else if (content is FunctionResultContent resultContent)
             {
-                WriteToolResult(resultContent.CallId, resultContent.Exception?.Message ?? resultContent.Result?.ToString() ?? string.Empty);
+                WriteToolResult(resultContent.CallId, resultContent.Exception ?? resultContent.Result);
             }
         }
     }
@@ -51,8 +51,8 @@ internal class ConsoleOutputCapture : IOutputCapture
     private void WriteToolCall(string callId, string target, string toolName, string arguments) =>
         WriteBlock($"[{callId}] {target}:{toolName}", arguments, ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
 
-    private void WriteToolResult(string callId, string message) =>
-        WriteBlock($"[{callId}] Tool Result", TruncateLine(message), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
+    private void WriteToolResult(string callId, object? result) =>
+        WriteBlock($"[{callId}] Tool Result", TruncateLine(result), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
     private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)
     {
@@ -92,14 +92,18 @@ internal class ConsoleOutputCapture : IOutputCapture
         }
     }
 
-    private static string TruncateLine(string input)
+    private static string TruncateLine(object? result)
     {
-        if (string.IsNullOrEmpty(input))
-            return input;
+        if (result == null)
+            return "null";
 
         var isTruncated = false;
         var output = new StringBuilder();
-        var lines = input.Split(Environment.NewLine, StringSplitOptions.None).Where(static item => !string.IsNullOrEmpty(item)).ToList();
+        var lines = JsonSerializer
+            .Serialize(result, _options)
+            .Split(Environment.NewLine, StringSplitOptions.None)
+            .Where(static item => !string.IsNullOrEmpty(item))
+            .ToList();
         for (var index = 0; index < lines.Count; index++)
         {
             if (lines.Count > MaxLogLine && index > MaxLogLine / 2 && index < lines.Count - MaxLogLine / 2)
@@ -109,10 +113,8 @@ internal class ConsoleOutputCapture : IOutputCapture
                     output.AppendLine("[输出被折叠，行数过多]");
                     isTruncated = true;
                 }
-
                 continue;
             }
-
             output.AppendLine(lines[index]);
         }
 

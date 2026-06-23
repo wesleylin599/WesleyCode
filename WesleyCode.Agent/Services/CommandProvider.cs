@@ -41,9 +41,9 @@ internal sealed class CommandProvider : AIContextProvider
         );
     }
 
-    private async Task<string> Command([Description("命令调用模型")] CommandItem item, CancellationToken cancellationToken = default)
+    private async Task<CommandResult> Command([Description("命令调用模型")] CommandItem item, CancellationToken cancellationToken = default)
     {
-        string output = string.Empty;
+        CommandResult output = new CommandResult();
         try
         {
             var timeoutSeconds = item.TimeoutSeconds <= 0 ? 300 : Math.Min(item.TimeoutSeconds, 3600);
@@ -59,15 +59,17 @@ internal sealed class CommandProvider : AIContextProvider
                 .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream))
                 .WithValidation(CommandResultValidation.None);
 
-            var result = await cli.ExecuteAsync(timeoutSource.Token);
+            var execute = await cli.ExecuteAsync(timeoutSource.Token);
             var standardOutput = DecodeCommandOutput(standardOutputStream.ToArray());
             var standardError = DecodeCommandOutput(standardErrorStream.ToArray());
 
-            output = FormatCommandResult(result.ExitCode, standardOutput, standardError);
+            output.ExitCode = execute.ExitCode;
+            output.Output = standardOutput;
+            output.Error = standardError;
         }
         catch (Exception ex)
         {
-            output = $"执行失败: {ex.Message}";
+            output.Error = ex.Message;
         }
 
         return output;
@@ -120,33 +122,6 @@ internal sealed class CommandProvider : AIContextProvider
             return false;
         }
     }
-
-    private static string FormatCommandResult(int exitCode, string standardOutput, string standardError)
-    {
-        var output = new StringBuilder();
-        output.Append("exit_code: ").AppendLine(exitCode.ToString());
-
-        if (!string.IsNullOrWhiteSpace(standardOutput))
-        {
-            output.AppendLine("stdout:");
-            var truncatedOutput = standardOutput.TrimEnd();
-            output.AppendLine(truncatedOutput);
-        }
-
-        if (!string.IsNullOrWhiteSpace(standardError))
-        {
-            output.AppendLine("stderr:");
-            var truncatedError = standardError.TrimEnd();
-            output.AppendLine(truncatedError);
-        }
-
-        if (string.IsNullOrWhiteSpace(standardOutput) && string.IsNullOrWhiteSpace(standardError))
-        {
-            output.AppendLine("(no output)");
-        }
-
-        return output.ToString().TrimEnd();
-    }
 }
 
 public sealed class CommandItem
@@ -154,6 +129,18 @@ public sealed class CommandItem
     [JsonPropertyName("command")]
     public string Command { get; set; } = string.Empty;
 
-    [JsonPropertyName("timeout")]
+    [JsonPropertyName("timeout_seconds")]
     public int TimeoutSeconds { get; set; }
+}
+
+public sealed class CommandResult
+{
+    [JsonPropertyName("exit_code")]
+    public int ExitCode { get; set; }
+
+    [JsonPropertyName("output")]
+    public string Output { get; set; } = string.Empty;
+
+    [JsonPropertyName("error")]
+    public string Error { get; set; } = string.Empty;
 }
