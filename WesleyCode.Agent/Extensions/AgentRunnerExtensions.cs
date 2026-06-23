@@ -34,7 +34,7 @@ internal static class AgentRunnerExtensions
         CancellationToken cancellationToken = default
     )
     {
-        var options = new AgentRunOptions { AllowBackgroundResponses = true };
+        var options = new AgentRunOptions();
         for (var attempt = 0; attempt < MaxEmptyResponseRetries; attempt++)
         {
             var response = await agent
