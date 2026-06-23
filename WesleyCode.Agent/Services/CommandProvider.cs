@@ -5,13 +5,14 @@ using CliWrap;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Options;
 
 namespace WesleyCode.Agent.Services;
 
 internal sealed class CommandProvider : AIContextProvider
 {
-    private const int MaxOutputSize = 1024;
+    private const int MaxOutputLine = 10;
 
     private static readonly UTF8Encoding Utf8StrictEncoding = new(false, true);
     private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
@@ -69,7 +70,7 @@ internal sealed class CommandProvider : AIContextProvider
         }
         catch (Exception ex)
         {
-            output = ex.Message;
+            output = $"执行失败: {ex.Message}";
         }
 
         return output;
@@ -131,14 +132,14 @@ internal sealed class CommandProvider : AIContextProvider
         if (!string.IsNullOrWhiteSpace(standardOutput))
         {
             output.AppendLine("stdout:");
-            var truncatedOutput = standardOutput.TrimEnd();
+            var truncatedOutput = standardOutput.TrimEnd().TruncateLine(MaxOutputLine);
             output.AppendLine(truncatedOutput);
         }
 
         if (!string.IsNullOrWhiteSpace(standardError))
         {
             output.AppendLine("stderr:");
-            var truncatedError = standardError.TrimEnd();
+            var truncatedError = standardError.TrimEnd().TruncateLine(MaxOutputLine);
             output.AppendLine(truncatedError);
         }
 
