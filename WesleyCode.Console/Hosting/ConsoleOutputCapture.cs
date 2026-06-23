@@ -1,16 +1,12 @@
 ﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
-using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Services;
 
 namespace WesleyCode.Console.Hosting;
 
 internal class ConsoleOutputCapture : IOutputCapture
 {
-    private const int MaxLogLine = 10;
-    private const int MaxLogLength = 1024;
-
     private static readonly JsonSerializerOptions _options = new JsonSerializerOptions
     {
         WriteIndented = true,
@@ -52,12 +48,7 @@ internal class ConsoleOutputCapture : IOutputCapture
         WriteBlock($"[{callId}] {target}:{toolName}", arguments, ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
 
     private void WriteToolResult(string callId, string message) =>
-        WriteBlock(
-            $"[{callId}] Tool Result",
-            message.TruncateLine(MaxLogLine).TruncateOutput(MaxLogLength),
-            ConsoleColor.DarkBlue,
-            ConsoleColor.DarkGray
-        );
+        WriteBlock($"[{callId}] Tool Result", message, ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
     private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)
     {
@@ -79,7 +70,7 @@ internal class ConsoleOutputCapture : IOutputCapture
             return "(no args)";
         }
 
-        return JsonSerializer.Serialize(arguments, _options).TruncateLine(MaxLogLine).TruncateOutput(MaxLogLength);
+        return JsonSerializer.Serialize(arguments, _options);
     }
 
     private static IEnumerable<string> Normalize(string? message)

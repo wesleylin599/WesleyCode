@@ -54,6 +54,6 @@ internal static class AgentRunnerExtensions
     {
         using var md5 = MD5.Create();
         var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(target));
-        return BitConverter.ToString(hash, 4, 8).Replace("-", string.Empty).ToLowerInvariant();
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

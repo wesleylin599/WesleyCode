@@ -5,7 +5,6 @@ using CliWrap;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Options;
 
 namespace WesleyCode.Agent.Services;
@@ -132,14 +131,14 @@ internal sealed class CommandProvider : AIContextProvider
         if (!string.IsNullOrWhiteSpace(standardOutput))
         {
             output.AppendLine("stdout:");
-            var truncatedOutput = standardOutput.TrimEnd().TruncateOutput(MaxOutputSize);
+            var truncatedOutput = standardOutput.TrimEnd();
             output.AppendLine(truncatedOutput);
         }
 
         if (!string.IsNullOrWhiteSpace(standardError))
         {
             output.AppendLine("stderr:");
-            var truncatedError = standardError.TrimEnd().TruncateOutput(MaxOutputSize);
+            var truncatedError = standardError.TrimEnd();
             output.AppendLine(truncatedError);
         }
 
