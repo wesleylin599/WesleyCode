@@ -1,6 +1,6 @@
-﻿using System.Text;
-using System.Text.Encodings.Web;
+﻿using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using WesleyCode.Agent.Services;
 
@@ -8,12 +8,11 @@ namespace WesleyCode.Console.Hosting;
 
 internal class ConsoleOutputCapture : IOutputCapture
 {
-    private const int MaxLogLine = 10;
     private const int MaxLogLength = 256;
 
     private static readonly JsonSerializerOptions _options = new JsonSerializerOptions
     {
-        WriteIndented = true,
+        WriteIndented = false,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
@@ -96,29 +95,7 @@ internal class ConsoleOutputCapture : IOutputCapture
     {
         if (string.IsNullOrEmpty(message))
             return "null";
-
-        var isTruncated = false;
-        var output = new StringBuilder();
-        var lines = message.Split(["\r\n", "\n"], StringSplitOptions.None).ToList();
-        for (var index = 0; index < lines.Count; index++)
-        {
-            var item = lines[index];
-            if (string.IsNullOrEmpty(item))
-                continue;
-            if (lines.Count > MaxLogLine && index > MaxLogLine / 2 && index < lines.Count - MaxLogLine / 2)
-            {
-                if (!isTruncated)
-                {
-                    output.AppendLine("[输出被折叠，行数过多]");
-                    isTruncated = true;
-                }
-                continue;
-            }
-            output.AppendLine(item);
-        }
-
-        return output.Length > MaxLogLength
-            ? output.ToString().TrimEnd().Substring(0, MaxLogLength - 1) + Environment.NewLine + "[输出被截断，内容过长]"
-            : output.ToString().TrimEnd();
+        var output = Regex.Replace(Regex.Unescape(message).Replace("\r\n", "#").Replace("\n", "#"), @"[ ]+", " ").TrimEnd();
+        return output.Length > MaxLogLength ? output.Substring(0, MaxLogLength - 1) + "[输出被截断，内容过长]" : output;
     }
 }

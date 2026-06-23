@@ -134,6 +134,7 @@ public static class ServiceCollectionExtensions
         {
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var options = provider.GetRequiredService<IOptions<ChatClientOptions>>();
+            var working = provider.GetRequiredService<IOptions<WorkingOptions>>();
 
             var client = CreateChatClient(options.Value, loggerFactory);
             StringBuilder builder = new StringBuilder();
@@ -143,6 +144,7 @@ public static class ServiceCollectionExtensions
                 builder.AppendLine($"BaseUrl:{options.Value.BaseUrl}");
             }
             builder.AppendLine($"ModelId:{options.Value.ModelId}");
+            builder.AppendLine($"Working:{working.Value.BasePath}");
             provider.GetRequiredService<IOutputCapture>().WriteSystemMessage(builder.ToString());
 
             return client
