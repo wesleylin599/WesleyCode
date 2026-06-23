@@ -1,4 +1,5 @@
-﻿using System.Text.Encodings.Web;
+﻿using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using WesleyCode.Agent.Services;
@@ -7,6 +8,9 @@ namespace WesleyCode.Console.Hosting;
 
 internal class ConsoleOutputCapture : IOutputCapture
 {
+    private const int MaxLogLine = 10;
+    private const int MaxLogLength = 1024;
+
     private static readonly JsonSerializerOptions _options = new JsonSerializerOptions
     {
         WriteIndented = true,
@@ -48,7 +52,7 @@ internal class ConsoleOutputCapture : IOutputCapture
         WriteBlock($"[{callId}] {target}:{toolName}", arguments, ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
 
     private void WriteToolResult(string callId, string message) =>
-        WriteBlock($"[{callId}] Tool Result", message, ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
+        WriteBlock($"[{callId}] Tool Result", TruncateLine(message), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
     private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)
     {
@@ -86,5 +90,34 @@ internal class ConsoleOutputCapture : IOutputCapture
         {
             yield return line;
         }
+    }
+
+    private static string TruncateLine(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        var isTruncated = false;
+        var output = new StringBuilder();
+        var lines = input.Split(Environment.NewLine, StringSplitOptions.None).Where(static item => !string.IsNullOrEmpty(item)).ToList();
+        for (var index = 0; index < lines.Count; index++)
+        {
+            if (lines.Count > MaxLogLine && index > MaxLogLine / 2 && index < lines.Count - MaxLogLine / 2)
+            {
+                if (!isTruncated)
+                {
+                    output.AppendLine("[输出被折叠，行数过多]");
+                    isTruncated = true;
+                }
+
+                continue;
+            }
+
+            output.AppendLine(lines[index]);
+        }
+
+        return output.Length > MaxLogLength
+            ? output.ToString().TrimEnd().Substring(0, MaxLogLength) + Environment.NewLine + "[输出被截断，内容过长]"
+            : output.ToString().TrimEnd();
     }
 }
