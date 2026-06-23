@@ -16,6 +16,7 @@ public sealed class SessionStore : ISessionStore
     private readonly SessionOptions _options;
     private readonly ILogger<SessionStore> _logger;
     private readonly string _sessionHistoryPath;
+    private readonly SemaphoreSlim _fileLock = new(1, 1);
 
     public SessionStore(AIAgent agentRunner, IOptions<WorkingOptions> working, IOptions<SessionOptions> options, ILogger<SessionStore> logger)
     {
@@ -34,6 +35,8 @@ public sealed class SessionStore : ISessionStore
 
         try
         {
+            await _fileLock.WaitAsync(cancellationToken);
+
             var content = await File.ReadAllTextAsync(_sessionHistoryPath, Encoding.UTF8, cancellationToken);
             if (string.IsNullOrWhiteSpace(content))
             {
@@ -54,6 +57,10 @@ public sealed class SessionStore : ISessionStore
             _logger.LogWarning(ex, "Failed to load session history, starting new session: {SessionPath}", _sessionHistoryPath);
             return await _agentRunner.CreateSessionAsync(cancellationToken);
         }
+        finally
+        {
+            _fileLock.Release();
+        }
     }
 
     public async Task SaveAsync(AgentSession session, CancellationToken cancellationToken)
@@ -69,6 +76,8 @@ public sealed class SessionStore : ISessionStore
 
         try
         {
+            await _fileLock.WaitAsync(cancellationToken);
+
             await File.WriteAllTextAsync(tempPath, element.GetRawText(), SessionEncoding, cancellationToken);
             if (File.Exists(_sessionHistoryPath))
             {
@@ -81,6 +90,7 @@ public sealed class SessionStore : ISessionStore
         }
         finally
         {
+            _fileLock.Release();
             if (File.Exists(tempPath))
             {
                 File.Delete(tempPath);
@@ -92,8 +102,15 @@ public sealed class SessionStore : ISessionStore
     {
         if (File.Exists(_sessionHistoryPath))
         {
-            File.Delete(_sessionHistoryPath);
-            _logger.LogInformation("Session history cleared: {SessionPath}", _sessionHistoryPath);
+            try
+            {
+                File.Delete(_sessionHistoryPath);
+                _logger.LogInformation("Session history cleared: {SessionPath}", _sessionHistoryPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to clear session history: {SessionPath}", _sessionHistoryPath);
+            }
         }
         return Task.CompletedTask;
     }
@@ -107,6 +124,9 @@ public sealed class SessionStore : ISessionStore
 
         try
         {
+            // 使用文件锁确保线程安全
+            await _fileLock.WaitAsync(cancellationToken);
+
             var directory = Path.GetDirectoryName(_sessionHistoryPath) ?? AppContext.BaseDirectory;
             Directory.CreateDirectory(directory);
             var backupPath = Path.Combine(
@@ -123,6 +143,10 @@ public sealed class SessionStore : ISessionStore
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "{Reason}，但备份会话文件失败: {SessionPath}", reason, _sessionHistoryPath);
+        }
+        finally
+        {
+            _fileLock.Release();
         }
     }
 }

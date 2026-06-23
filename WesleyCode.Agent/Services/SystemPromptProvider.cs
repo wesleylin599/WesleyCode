@@ -21,12 +21,10 @@ internal sealed class SystemPromptProvider : AIContextProvider
 
     protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
-        if (!string.IsNullOrWhiteSpace(_agentPrompt))
+        if (string.IsNullOrWhiteSpace(_agentPrompt))
         {
-            return new AIContext { Instructions = _agentPrompt };
+            _agentPrompt ??= await BuildPromptAsync(cancellationToken);
         }
-
-        _agentPrompt ??= await BuildPromptAsync(cancellationToken);
 
         return new AIContext { Instructions = _agentPrompt };
     }
@@ -36,17 +34,26 @@ internal sealed class SystemPromptProvider : AIContextProvider
         var builder = new StringBuilder();
         builder.AppendLine($"当前操作系统是\"{Environment.OSVersion.VersionString}\"");
         builder.AppendLine($"当前工作目录是\"{_workDirectory}\"");
-        foreach (var path in EnumeratePromptFiles())
+
+        var promptFiles = EnumeratePromptFiles().ToList();
+        foreach (var path in promptFiles)
         {
             _logger.LogDebug("加载提示词文件 `{PromptPath}`", path);
-            var prompt = await File.ReadAllTextAsync(path, cancellationToken);
-            if (string.IsNullOrWhiteSpace(prompt))
+            try
             {
-                continue;
-            }
+                var prompt = await File.ReadAllTextAsync(path, cancellationToken);
+                if (string.IsNullOrWhiteSpace(prompt))
+                {
+                    continue;
+                }
 
-            builder.AppendLine($"以下附加指令来自 {path}:");
-            builder.AppendLine(prompt);
+                builder.AppendLine($"以下附加指令来自 {path}:");
+                builder.AppendLine(prompt);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "读取提示词文件失败: {PromptPath}", path);
+            }
         }
 
         return builder.ToString().Trim();

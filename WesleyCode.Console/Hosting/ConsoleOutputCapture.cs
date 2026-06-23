@@ -118,7 +118,7 @@ internal class ConsoleOutputCapture : IOutputCapture
         }
 
         return output.Length > MaxLogLength
-            ? output.ToString().TrimEnd().Substring(0, MaxLogLength - 20) + Environment.NewLine + "[输出被截断，内容过长]"
+            ? output.ToString().TrimEnd().Substring(0, MaxLogLength - 1) + Environment.NewLine + "[输出被截断，内容过长]"
             : output.ToString().TrimEnd();
     }
 }
