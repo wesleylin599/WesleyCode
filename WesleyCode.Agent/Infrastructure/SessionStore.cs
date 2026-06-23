@@ -1,5 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
@@ -18,15 +17,14 @@ public sealed class SessionStore : ISessionStore
     private readonly ILogger<SessionStore> _logger;
     private readonly string _sessionHistoryPath;
 
-    public SessionStore(AIAgent agentRunner, IOptions<SessionOptions> options, ILogger<SessionStore> logger)
+    public SessionStore(AIAgent agentRunner, IOptions<WorkingOptions> working, IOptions<SessionOptions> options, ILogger<SessionStore> logger)
     {
         _agentRunner = agentRunner;
         _options = options.Value;
         _logger = logger;
         var baseDir = AppContext.BaseDirectory;
         var sessionDir = Path.Combine(baseDir, _options.DirectoryName);
-        var workDirectory = Directory.GetCurrentDirectory();
-        _sessionHistoryPath = Path.Combine(sessionDir, $"{workDirectory.ComputeMd5()}.json");
+        _sessionHistoryPath = Path.Combine(sessionDir, $"{working.Value.BasePath.ComputeMd5()}.json");
     }
 
     public async Task<AgentSession> LoadAsync(CancellationToken cancellationToken)

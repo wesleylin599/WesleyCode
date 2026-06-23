@@ -26,62 +26,12 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddAgentHost(this IServiceCollection services, string workDirectory)
     {
-        services.AddSingleton<IDistributedCache>(provider =>
-        {
-            var options = provider.GetRequiredService<IOptions<CacheOptions>>().Value;
-            var cacheOptions = new MemoryDistributedCacheOptions { SizeLimit = options.SizeLimit };
-            return new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(cacheOptions));
-        });
-
-        services.TryAddSingleton<IOutputCapture, NullOutputCapture>();
-        services.AddSingleton<ISessionStore, SessionStore>();
-        services.AddSingleton<IAgentRunner, AgentRunner>();
-        services.AddAIProviders(workDirectory);
-        services.ConfigOptions();
-        services.AddAIAgent();
-
-        return services;
-    }
-
-    private static IServiceCollection AddAIProviders(this IServiceCollection services, string workDirectory)
-    {
-        services.AddSingleton<AIContextProvider, CommandProvider>();
-
-        services.AddSingleton<AIContextProvider, AgentModeProvider>();
-
-        services.AddSingleton<AIContextProvider>(provider => new FileMemoryProvider(new InMemoryAgentFileStore()));
-
-        services.AddSingleton<AIContextProvider>(provider => new FileAccessProvider(new FileSystemAgentFileStore(workDirectory)));
-
-        services.AddSingleton<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
-
-        services.AddSingleton<AIContextProvider>(provider => new SystemPromptProvider(workDirectory, provider.GetRequiredService<ILoggerFactory>()));
-
-        services.AddSingleton<AIContextProvider>(provider => new AgentSkillsProvider(
-            skillPaths: [Path.Combine(AppContext.BaseDirectory, "skills", "system"), Path.Combine(AppContext.BaseDirectory, "skills", "user")],
-            loggerFactory: provider.GetRequiredService<ILoggerFactory>()
-        ));
-
-        services.AddSingleton<AIContextProvider>(provider =>
-        {
-            var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
-            var pipeline = new PipelineCompactionStrategy(
-                new ToolResultCompactionStrategy(CompactionTriggers.MessagesExceed(compactionOptions.ToolResultMessageLimit)),
-                new SummarizationCompactionStrategy(
-                    provider.GetRequiredService<IChatClient>(),
-                    CompactionTriggers.TokensExceed(compactionOptions.SummaryTokenLimit)
-                ),
-                new SlidingWindowCompactionStrategy(CompactionTriggers.TurnsExceed(compactionOptions.SlidingWindowTurnLimit)),
-                new TruncationCompactionStrategy(CompactionTriggers.GroupsExceed(compactionOptions.TruncationGroupsLimit))
-            );
-            return new CompactionProvider(pipeline, loggerFactory: provider.GetRequiredService<ILoggerFactory>());
-        });
-
-        return services;
-    }
-
-    private static IServiceCollection ConfigOptions(this IServiceCollection services)
-    {
+        services
+            .AddOptions<WorkingOptions>()
+            .Configure(config =>
+            {
+                config.BasePath = workDirectory;
+            });
         services
             .AddOptions<ChatClientOptions>()
             .Configure<IConfiguration>(
@@ -111,7 +61,6 @@ public static class ServiceCollectionExtensions
             .Configure(config =>
             {
                 config.ToolResultMessageLimit = 7;
-                config.SummaryTokenLimit = 3000;
                 config.SlidingWindowTurnLimit = 10;
                 config.TruncationGroupsLimit = 12;
             });
@@ -121,6 +70,64 @@ public static class ServiceCollectionExtensions
             {
                 config.DirectoryName = "session";
             });
+
+        services.AddSingleton<IDistributedCache>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<CacheOptions>>().Value;
+            var cacheOptions = new MemoryDistributedCacheOptions { SizeLimit = options.SizeLimit };
+            return new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(cacheOptions));
+        });
+
+        services.TryAddSingleton<IOutputCapture, NullOutputCapture>();
+        services.AddSingleton<ISessionStore, SessionStore>();
+        services.AddSingleton<IAgentRunner, AgentRunner>();
+        services.AddAIProviders();
+        services.AddAIAgent();
+
+        return services;
+    }
+
+    private static IServiceCollection AddAIProviders(this IServiceCollection services)
+    {
+        services.AddSingleton<AIContextProvider, CommandProvider>();
+
+        services.AddSingleton<AIContextProvider, AgentModeProvider>();
+
+        services.AddSingleton<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
+
+        services.AddSingleton<AIContextProvider>(provider => new FileMemoryProvider(
+            new FileSystemAgentFileStore(Path.Combine(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath, ".cache"))
+        ));
+
+        services.AddSingleton<AIContextProvider>(provider => new FileAccessProvider(
+            new FileSystemAgentFileStore(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath)
+        ));
+
+        services.AddSingleton<AIContextProvider>(provider => new AgentSkillsProvider(
+            skillPaths:
+            [
+                Path.Combine(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath, "skills"),
+                Path.Combine(AppContext.BaseDirectory, "skills"),
+            ],
+            loggerFactory: provider.GetRequiredService<ILoggerFactory>()
+        ));
+
+        services.AddSingleton<AIContextProvider>(provider => new SystemPromptProvider(
+            provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath,
+            provider.GetRequiredService<ILoggerFactory>()
+        ));
+
+        services.AddSingleton<AIContextProvider>(provider =>
+        {
+            var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
+            var pipeline = new PipelineCompactionStrategy(
+                new ToolResultCompactionStrategy(CompactionTriggers.MessagesExceed(compactionOptions.ToolResultMessageLimit)),
+                new SlidingWindowCompactionStrategy(CompactionTriggers.TurnsExceed(compactionOptions.SlidingWindowTurnLimit)),
+                new TruncationCompactionStrategy(CompactionTriggers.GroupsExceed(compactionOptions.TruncationGroupsLimit))
+            );
+            return new CompactionProvider(pipeline, loggerFactory: provider.GetRequiredService<ILoggerFactory>());
+        });
+
         return services;
     }
 

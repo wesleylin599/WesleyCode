@@ -1,7 +1,7 @@
-namespace WesleyCode.Agent.Options;
+﻿namespace WesleyCode.Agent.Options;
 
-internal sealed class AgentOptions
+public sealed class AgentOptions
 {
-    public string Name { get; set; } = string.Empty;
-    public string Instructions { get; set; } = string.Empty;
+    public string Name { get; set; } = "main";
+    public string Instructions { get; set; } = "使用工具完成用户需求";
 }

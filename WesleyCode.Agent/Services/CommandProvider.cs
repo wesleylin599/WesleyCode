@@ -4,6 +4,8 @@ using System.Text.Json.Serialization;
 using CliWrap;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
+using WesleyCode.Agent.Options;
 
 namespace WesleyCode.Agent.Services;
 
@@ -17,6 +19,13 @@ internal sealed class CommandProvider : AIContextProvider
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 
+    private readonly IOptions<WorkingOptions> _options;
+
+    public CommandProvider(IOptions<WorkingOptions> options)
+    {
+        this._options = options;
+    }
+
     protected override ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
         return ValueTask.FromResult(
@@ -24,6 +33,7 @@ internal sealed class CommandProvider : AIContextProvider
             {
                 Instructions = $"""
                 当前使用的命令行工具是`{FileName}`
+                命令行工具的工作目录在`{_options.Value.BasePath}`
                 使用`run_command`来调用命令行工具执行命令
                 """,
                 Tools = [AIFunctionFactory.Create(Command, new AIFunctionFactoryOptions { Name = "run_command", Description = "执行命令行" })],
@@ -31,7 +41,7 @@ internal sealed class CommandProvider : AIContextProvider
         );
     }
 
-    private static async Task<string> Command([Description("命令调用模型")] CommandItem item, CancellationToken cancellationToken = default)
+    private async Task<string> Command([Description("命令调用模型")] CommandItem item, CancellationToken cancellationToken = default)
     {
         string output = string.Empty;
         try
@@ -44,7 +54,7 @@ internal sealed class CommandProvider : AIContextProvider
 
             var cli = Cli.Wrap(FileName)
                 .WithArguments(item.Command ?? string.Empty)
-                .WithWorkingDirectory(Directory.GetCurrentDirectory())
+                .WithWorkingDirectory(_options.Value.BasePath)
                 .WithStandardOutputPipe(PipeTarget.ToStream(standardOutputStream))
                 .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream))
                 .WithValidation(CommandResultValidation.None);
