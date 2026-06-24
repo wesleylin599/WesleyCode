@@ -13,15 +13,10 @@ builder.Logging.AddSimpleConsole(options =>
     options.SingleLine = true;
     options.TimestampFormat = "HH:mm:ss ";
 });
-builder
-    .Services.AddHttpClient()
-    .ConfigureHttpClientDefaults(builder =>
-    {
-        builder.ConfigureHttpClient(c =>
-        {
-            c.Timeout = Timeout.InfiniteTimeSpan;
-        });
-    });
+builder.Services.ConfigureHttpClientAgents(client =>
+{
+    client.Timeout = Timeout.InfiniteTimeSpan;
+});
 builder.Services.AddSingleton<IOutputCapture, ConsoleOutputCapture>();
 builder.Services.AddHostedService<ConsoleAgentHostedService>();
 builder.Services.AddAgentHost(Directory.GetCurrentDirectory());

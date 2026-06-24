@@ -1,4 +1,5 @@
 ﻿using System.ClientModel;
+using System.ClientModel.Primitives;
 using System.Text;
 using Anthropic;
 using Microsoft.Agents.AI;
@@ -21,8 +22,15 @@ namespace WesleyCode.Agent.Extensions;
 
 public static class ServiceCollectionExtensions
 {
+    private const string AgentHttpClientName = "WesleyCode.Agent";
+
     public static bool HasToolContent(this IList<AIContent> contents) =>
         contents.Any(static content => content is FunctionCallContent or FunctionResultContent);
+
+    public static IHttpClientBuilder ConfigureHttpClientAgents(this IServiceCollection services, Action<HttpClient> configureClient)
+    {
+        return services.AddHttpClient(AgentHttpClientName).ConfigureHttpClient(configureClient);
+    }
 
     public static IServiceCollection AddAgentHost(this IServiceCollection services, string workDirectory)
     {
@@ -135,8 +143,9 @@ public static class ServiceCollectionExtensions
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var options = provider.GetRequiredService<IOptions<ChatClientOptions>>();
             var working = provider.GetRequiredService<IOptions<WorkingOptions>>();
+            var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
 
-            var client = CreateChatClient(options.Value, loggerFactory);
+            var client = CreateChatClient(options.Value, loggerFactory, httpClientFactory);
             StringBuilder builder = new StringBuilder();
             builder.AppendLine($"Provider:{options.Value.Provider}");
             if (!string.IsNullOrWhiteSpace(options.Value.BaseUrl))
@@ -173,25 +182,31 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static IChatClient CreateChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
+    private static IChatClient CreateChatClient(ChatClientOptions options, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory)
     {
         return options.Provider switch
         {
-            "anthropic" => CreateAnthropicChatClient(options),
-            "openai" => CreateOpenAiChatClient(options, loggerFactory),
-            "crs" => CreateCrsChatClient(options, loggerFactory),
-            "ollama" => CreateOllamaChatClient(options),
+            "anthropic" => CreateAnthropicChatClient(options, httpClientFactory),
+            "openai" => CreateOpenAiChatClient(options, loggerFactory, httpClientFactory),
+            "crs" => CreateCrsChatClient(options, loggerFactory, httpClientFactory),
+            "ollama" => CreateOllamaChatClient(options, httpClientFactory),
             _ => throw new InvalidOperationException($"不支持的 IChatClient Provider: {options.Provider}。可选值: openai、anthropic、crs、ollama。"),
         };
     }
 
-    private static IChatClient CreateOpenAiChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
+    private static IChatClient CreateOpenAiChatClient(ChatClientOptions options, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory)
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
             throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
         }
-        var clientOptions = new OpenAIClientOptions { MessageLoggingPolicy = new LoggingAuthPolicy(false, true, loggerFactory) };
+        var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
+        var clientOptions = new OpenAIClientOptions
+        {
+            MessageLoggingPolicy = new LoggingAuthPolicy(false, true, loggerFactory),
+            NetworkTimeout = Timeout.InfiniteTimeSpan,
+            Transport = new HttpClientPipelineTransport(httpClient),
+        };
         var endpoint = GetEndpoint(options.BaseUrl);
         if (endpoint is not null)
         {
@@ -201,31 +216,37 @@ public static class ServiceCollectionExtensions
         return new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions).GetResponsesClient().AsIChatClient(options.ModelId);
     }
 
-    private static IChatClient CreateCrsChatClient(ChatClientOptions options, ILoggerFactory loggerFactory)
+    private static IChatClient CreateCrsChatClient(ChatClientOptions options, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory)
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
             throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
         }
-        var baseClient = CreateOpenAiChatClient(options, loggerFactory);
+        var baseClient = CreateOpenAiChatClient(options, loggerFactory, httpClientFactory);
         return CrsChatClient.Create(baseClient);
     }
 
-    private static IChatClient CreateAnthropicChatClient(ChatClientOptions options)
+    private static IChatClient CreateAnthropicChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
             throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
         }
         var endpoint = GetEndpoint(options.BaseUrl);
+        var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
         var client = endpoint is null
-            ? new AnthropicClient { ApiKey = options.ApiKey }
-            : new AnthropicClient { ApiKey = options.ApiKey, BaseUrl = endpoint.ToString().TrimEnd('/') };
+            ? new AnthropicClient { ApiKey = options.ApiKey, HttpClient = httpClient }
+            : new AnthropicClient
+            {
+                ApiKey = options.ApiKey,
+                BaseUrl = endpoint.ToString().TrimEnd('/'),
+                HttpClient = httpClient,
+            };
 
         return client.AsIChatClient(options.ModelId);
     }
 
-    private static IChatClient CreateOllamaChatClient(ChatClientOptions options)
+    private static IChatClient CreateOllamaChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
@@ -240,7 +261,9 @@ public static class ServiceCollectionExtensions
         {
             throw new InvalidOperationException("未配置 BaseUrl，请设置 WINTEAM_BASEURL。");
         }
-        return new OllamaApiClient(endpoint, options.ModelId);
+        var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
+        httpClient.BaseAddress = endpoint;
+        return new OllamaApiClient(httpClient, options.ModelId);
     }
 
     private static Uri? GetEndpoint(string? baseUrl)

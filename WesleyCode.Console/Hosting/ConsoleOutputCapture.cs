@@ -9,6 +9,10 @@ namespace WesleyCode.Console.Hosting;
 internal class ConsoleOutputCapture : IOutputCapture
 {
     private const int MaxLogLength = 256;
+    private const string TruncatedSuffix = "[输出被截断，内容过长]";
+
+    private static readonly Regex _whitespaceRegex = new(@"\s+", RegexOptions.Compiled);
+    private static readonly Regex _punctuationWhitespaceRegex = new(@"\s*([{}\[\](),:])\s*", RegexOptions.Compiled);
 
     private static readonly JsonSerializerOptions _options = new JsonSerializerOptions
     {
@@ -95,7 +99,33 @@ internal class ConsoleOutputCapture : IOutputCapture
     {
         if (string.IsNullOrEmpty(message))
             return "null";
-        var output = Regex.Replace(Regex.Unescape(message).Replace("\r\n", "#").Replace("\n", "#"), @"[ ]+", " ").TrimEnd();
-        return output.Length > MaxLogLength ? output.Substring(0, MaxLogLength - 1) + "[输出被截断，内容过长]" : output;
+
+        var output = CompactOutput(message);
+        if (output.Length <= MaxLogLength)
+        {
+            return output;
+        }
+
+        var contentLength = Math.Max(0, MaxLogLength - TruncatedSuffix.Length);
+        return output[..contentLength] + TruncatedSuffix;
+    }
+
+    private static string CompactOutput(string message)
+    {
+        var output = UnescapeMessage(message);
+        output = _whitespaceRegex.Replace(output.Trim(), " ");
+        return _punctuationWhitespaceRegex.Replace(output, "$1");
+    }
+
+    private static string UnescapeMessage(string message)
+    {
+        try
+        {
+            return Regex.Unescape(message);
+        }
+        catch (ArgumentException)
+        {
+            return message;
+        }
     }
 }
