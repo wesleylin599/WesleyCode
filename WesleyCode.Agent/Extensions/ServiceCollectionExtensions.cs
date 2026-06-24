@@ -69,7 +69,7 @@ public static class ServiceCollectionExtensions
             .AddOptions<CompactionOptions>()
             .Configure(config =>
             {
-                config.ToolResultMessageLimit = 7;
+                config.ToolResultMessageLimit = 64;
                 config.SlidingWindowTurnLimit = 10;
                 config.TruncationGroupsLimit = 12;
             });
@@ -126,8 +126,8 @@ public static class ServiceCollectionExtensions
         {
             var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
             var pipeline = new PipelineCompactionStrategy(
-                new ToolResultCompactionStrategy(CompactionTriggers.MessagesExceed(compactionOptions.ToolResultMessageLimit)),
                 new SlidingWindowCompactionStrategy(CompactionTriggers.TurnsExceed(compactionOptions.SlidingWindowTurnLimit)),
+                new ToolResultCompactionStrategy(CompactionTriggers.MessagesExceed(compactionOptions.ToolResultMessageLimit)),
                 new TruncationCompactionStrategy(CompactionTriggers.GroupsExceed(compactionOptions.TruncationGroupsLimit))
             );
             return new CompactionProvider(pipeline, loggerFactory: provider.GetRequiredService<ILoggerFactory>());
