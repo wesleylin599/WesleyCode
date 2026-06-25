@@ -22,7 +22,7 @@ namespace WesleyCode.Agent.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    private const string AgentHttpClientName = "WesleyCode.Agent";
+    private const string AgentHttpClientName = "Wesley";
 
     public static bool HasToolContent(this IList<AIContent> contents) =>
         contents.Any(static content => content is FunctionCallContent or FunctionResultContent);
@@ -56,8 +56,12 @@ public static class ServiceCollectionExtensions
             .Configure(config =>
             {
                 config.Name = "main";
-                config.Description = "核心智能体";
-                config.Instructions = "调用工具高效完成用户需求,完成后进行校验";
+                config.Description = "全自动智能体";
+                config.Instructions = """
+                调用工具高效完成用户需求
+                行动优先不要过多询问
+                完成后进行校验
+                """;
             });
         services
             .AddOptions<CacheOptions>()
@@ -143,9 +147,8 @@ public static class ServiceCollectionExtensions
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var options = provider.GetRequiredService<IOptions<ChatClientOptions>>();
             var working = provider.GetRequiredService<IOptions<WorkingOptions>>();
-            var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
 
-            var client = CreateChatClient(options.Value, loggerFactory, httpClientFactory);
+            var client = CreateChatClient(options.Value, loggerFactory, provider.GetRequiredService<IHttpClientFactory>());
             StringBuilder builder = new StringBuilder();
             builder.AppendLine($"Provider:{options.Value.Provider}");
             if (!string.IsNullOrWhiteSpace(options.Value.BaseUrl))
