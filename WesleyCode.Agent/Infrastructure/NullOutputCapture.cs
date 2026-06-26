@@ -21,6 +21,8 @@ internal class NullOutputCapture : IOutputCapture
 
     public void WriteSystemMessage(string message) => WriteBlock("System", message, ConsoleColor.Magenta, ConsoleColor.Gray);
 
+    public void WriteThinkingMessage(string message) => WriteBlock("Thinking", message, ConsoleColor.DarkGray, ConsoleColor.DarkGray);
+
     public void WriteTool(IList<AIContent> contents, string? target = null) =>
         WriteBlock(
             "Tool",

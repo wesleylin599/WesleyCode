@@ -35,6 +35,8 @@ internal class ConsoleOutputCapture : IOutputCapture
 
     public void WriteSystemMessage(string message) => WriteBlock("System", message, ConsoleColor.Magenta, ConsoleColor.Gray);
 
+    public void WriteThinkingMessage(string message) => WriteBlock("Thinking", message, ConsoleColor.DarkGreen, ConsoleColor.DarkGray);
+
     public void WriteTool(IList<AIContent> contents, string? target = null)
     {
         target ??= "unknown";

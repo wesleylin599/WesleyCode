@@ -7,10 +7,10 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Anthropic" Version="12.29.1" />
+        <PackageReference Include="Anthropic" Version="12.31.0" />
         <PackageReference Include="CliWrap" Version="3.10.2" />
         <PackageReference Include="DiffPlex" Version="1.9.0" />
-        <PackageReference Include="Microsoft.Agents.AI" Version="1.10.0" />
+        <PackageReference Include="Microsoft.Agents.AI" Version="1.11.1" />
         <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
         <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.9" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.9" />

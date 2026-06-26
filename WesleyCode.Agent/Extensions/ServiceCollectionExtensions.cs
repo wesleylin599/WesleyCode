@@ -106,10 +106,20 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<AIContextProvider, AgentModeProvider>();
 
+        services.AddSingleton<AIContextProvider, WorkspaceFilePolicyProvider>();
+
         services.AddSingleton<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
         services.AddSingleton<AIContextProvider>(provider => new FileAccessProvider(
-            new FileSystemAgentFileStore(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath)
+            new FileSystemAgentFileStore(
+                Path.Combine(AppContext.BaseDirectory, "shared", provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath.ComputeMd5())
+            )
+        ));
+
+        services.AddSingleton<AIContextProvider>(provider => new FileMemoryProvider(
+            new FileSystemAgentFileStore(
+                Path.Combine(AppContext.BaseDirectory, "cache", provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath.ComputeMd5())
+            )
         ));
 
         services.AddSingleton<AIContextProvider>(provider => new AgentSkillsProvider(

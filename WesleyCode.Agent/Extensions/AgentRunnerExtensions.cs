@@ -21,6 +21,10 @@ internal static class AgentRunnerExtensions
             if (agentResponse.Contents.HasToolContent())
             {
                 capture.WriteTool(agentResponse.Contents, agentResponse.AuthorName);
+                if (!string.IsNullOrEmpty(agentResponse.Text))
+                {
+                    capture.WriteThinkingMessage(agentResponse.Text);
+                }
             }
             yield return agentResponse;
         }

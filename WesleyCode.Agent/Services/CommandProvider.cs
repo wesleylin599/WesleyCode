@@ -69,7 +69,7 @@ internal sealed class CommandProvider : AIContextProvider
         }
         catch (Exception ex)
         {
-            output.Error = ex.Message;
+            output.Error = $"调用失败 {ex.Message} 修复后重试";
         }
 
         return output;

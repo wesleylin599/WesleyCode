@@ -38,6 +38,10 @@ internal class AgentRunner : IAgentRunner
                 else if (message.Contents.HasToolContent())
                 {
                     _capture.WriteTool(message.Contents, message.AuthorName);
+                    if (!string.IsNullOrEmpty(message.Text))
+                    {
+                        _capture.WriteThinkingMessage(message.Text);
+                    }
                 }
                 else if (message.Role == ChatRole.Assistant)
                 {
