@@ -4,10 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Anthropic;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -65,33 +62,13 @@ public static class ServiceCollectionExtensions
                 完成后进行校验
                 """;
             });
-        services
-            .AddOptions<CacheOptions>()
-            .Configure(config =>
-            {
-                config.SizeLimit = 1024 * 1024;
-            });
-        services
-            .AddOptions<CompactionOptions>()
-            .Configure(config =>
-            {
-                config.ToolResultMessageLimit = 64;
-                config.SlidingWindowTurnLimit = 10;
-                config.TruncationGroupsLimit = 12;
-            });
+
         services
             .AddOptions<SessionOptions>()
             .Configure(config =>
             {
                 config.DirectoryName = "session";
             });
-
-        services.AddSingleton<IDistributedCache>(provider =>
-        {
-            var options = provider.GetRequiredService<IOptions<CacheOptions>>().Value;
-            var cacheOptions = new MemoryDistributedCacheOptions { SizeLimit = options.SizeLimit };
-            return new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(cacheOptions));
-        });
 
         services.AddSingleton<ISessionStore, SessionStore>();
         services.AddSingleton<IAgentRunner, AgentRunner>();
@@ -111,18 +88,6 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
-        //services.AddSingleton<AIContextProvider>(provider => new FileAccessProvider(
-        //    new FileSystemAgentFileStore(
-        //        Path.Combine(AppContext.BaseDirectory, "shared", provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath.ComputeMd5())
-        //    )
-        //));
-
-        //services.AddSingleton<AIContextProvider>(provider => new FileMemoryProvider(
-        //    new FileSystemAgentFileStore(
-        //        Path.Combine(AppContext.BaseDirectory, "cache", provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath.ComputeMd5())
-        //    )
-        //));
-
         services.AddSingleton<AIContextProvider>(provider => new AgentSkillsProvider(
             skillPaths:
             [
@@ -136,17 +101,6 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath,
             provider.GetRequiredService<ILoggerFactory>()
         ));
-
-        services.AddSingleton<AIContextProvider>(provider =>
-        {
-            var compactionOptions = provider.GetRequiredService<IOptions<CompactionOptions>>().Value;
-            var pipeline = new PipelineCompactionStrategy(
-                new SlidingWindowCompactionStrategy(CompactionTriggers.TurnsExceed(compactionOptions.SlidingWindowTurnLimit)),
-                new ToolResultCompactionStrategy(CompactionTriggers.MessagesExceed(compactionOptions.ToolResultMessageLimit)),
-                new TruncationCompactionStrategy(CompactionTriggers.GroupsExceed(compactionOptions.TruncationGroupsLimit))
-            );
-            return new CompactionProvider(pipeline, loggerFactory: provider.GetRequiredService<ILoggerFactory>());
-        });
 
         return services;
     }
@@ -170,12 +124,7 @@ public static class ServiceCollectionExtensions
             builder.AppendLine($"Working:{working.Value.BasePath}");
             provider.GetRequiredService<IOutputCapture>().WriteSystemMessage(builder.ToString());
 
-            return client
-                .AsBuilder()
-                .UseFunctionInvocation()
-                .UseDistributedCache(provider.GetRequiredService<IDistributedCache>())
-                .UseLogging(loggerFactory)
-                .Build();
+            return client.AsBuilder().UseFunctionInvocation().UseLogging(loggerFactory).Build();
         });
 
         services.AddSingleton<AIAgent>(provider =>

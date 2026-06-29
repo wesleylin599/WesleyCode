@@ -1,8 +1,6 @@
-﻿using System.Text;
-using System.Text.Encodings.Web;
+﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.AI;
 using WesleyCode.Agent.Services;
 
 namespace WesleyCode.Console.Hosting;
@@ -11,8 +9,6 @@ internal class ConsoleOutputCapture : IOutputCapture
 {
     private const int MaxLogLength = 256;
     private const string TruncatedSuffix = "[输出被截断，内容过长]";
-
-    private static readonly StringBuilder _builder = new StringBuilder();
 
     private static readonly Regex _whitespaceRegex = new(@"\s+", RegexOptions.Compiled);
     private static readonly Regex _punctuationWhitespaceRegex = new(@"\s*([{}\[\](),:])\s*", RegexOptions.Compiled);
@@ -38,37 +34,10 @@ internal class ConsoleOutputCapture : IOutputCapture
 
     public void WriteSystemMessage(string message) => WriteBlock("System", message, ConsoleColor.Magenta, ConsoleColor.Gray);
 
-    public void WriteContent(IList<AIContent> contents, string? target = null)
-    {
-        target ??= "unknown";
-        foreach (var content in contents)
-        {
-            if (content is TextReasoningContent reasoningContent)
-            {
-                _builder.Append(reasoningContent.Text);
-            }
-            else if (content is FunctionCallContent callContent)
-            {
-                WriteToolCall(callContent.CallId, target, callContent.Name, FormatToolArguments(callContent.Arguments));
-            }
-            else if (content is FunctionResultContent resultContent)
-            {
-                WriteToolResult(resultContent.CallId, resultContent.Exception?.Message ?? resultContent.Result?.ToString());
-            }
-            else if (_builder.Length > 0)
-            {
-                WriteThinkingMessage(_builder.ToString());
-                _builder.Clear();
-            }
-        }
-    }
+    public void WriteToolCall(string callId, string? target, string toolName, IDictionary<string, object?>? arguments) =>
+        WriteBlock($"[{callId}] {target ?? "unknow"}:{toolName}", FormatToolArguments(arguments), ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
 
-    private void WriteThinkingMessage(string message) => WriteBlock("Thinking", message, ConsoleColor.DarkGreen, ConsoleColor.DarkGray);
-
-    private void WriteToolCall(string callId, string target, string toolName, string arguments) =>
-        WriteBlock($"[{callId}] {target}:{toolName}", arguments, ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
-
-    private void WriteToolResult(string callId, string? message) =>
+    public void WriteToolResult(string callId, string? message) =>
         WriteBlock($"[{callId}] Tool Result", TruncateLine(message), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
     private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)

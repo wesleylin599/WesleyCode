@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.AI;
-
-namespace WesleyCode.Agent.Services;
+﻿namespace WesleyCode.Agent.Services;
 
 public interface IOutputCapture
 {
@@ -12,5 +10,7 @@ public interface IOutputCapture
 
     void WriteSystemMessage(string message);
 
-    void WriteContent(IList<AIContent> contents, string? target = null);
+    void WriteToolCall(string callId, string? target, string toolName, IDictionary<string, object?>? arguments);
+
+    void WriteToolResult(string callId, string? message);
 }

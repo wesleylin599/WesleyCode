@@ -147,7 +147,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 var stopwatch = Stopwatch.StartNew();
                 try
                 {
-                    var response = await _agentRunner.ExecuteAsync(input, session, source.Token);
+                    await _agentRunner.ExecuteAsync(input, session, source.Token);
                     MarkSessionDirty();
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)

@@ -1,4 +1,5 @@
-﻿using Microsoft.Agents.AI;
+﻿using System.Text;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using WesleyCode.Agent.Services;
 
@@ -17,18 +18,32 @@ internal class AgentRunner : IAgentRunner
 
     public ValueTask<AgentSession> CreateSessionAsync(CancellationToken cancellationToken = default) => _agent.CreateSessionAsync(cancellationToken);
 
-    public async Task<AgentResponse> ExecuteAsync(string input, AgentSession session, CancellationToken cancellationToken = default)
+    public async Task ExecuteAsync(string input, AgentSession session, CancellationToken cancellationToken = default)
     {
-        var options = new AgentRunOptions();
-        var responseUpdates = new List<AgentResponseUpdate>();
-        await foreach (var agentResponse in _agent.RunStreamingAsync(input, session, options, cancellationToken))
+        StringBuilder builder = new StringBuilder();
+        await foreach (var responseUpdate in _agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
         {
-            responseUpdates.Add(agentResponse);
-            _capture.WriteContent(agentResponse.Contents, agentResponse.AuthorName);
+            foreach (var content in responseUpdate.Contents)
+            {
+                if (content is FunctionCallContent callContent)
+                {
+                    _capture.WriteToolCall(callContent.CallId, responseUpdate.AuthorName, callContent.Name, callContent.Arguments);
+                }
+                else if (content is FunctionResultContent resultContent)
+                {
+                    _capture.WriteToolResult(resultContent.CallId, resultContent.Exception?.Message ?? resultContent.Result?.ToString());
+                }
+                else if (content is TextContent textContent)
+                {
+                    builder.Append(textContent.Text);
+                    if (builder.Length > 0 && responseUpdate.FinishReason == ChatFinishReason.Stop)
+                    {
+                        _capture.WriteAgentMessage(builder.ToString());
+                        builder.Clear();
+                    }
+                }
+            }
         }
-        var response = responseUpdates.ToAgentResponse();
-        _capture.WriteAgentMessage(response.Messages.Last().Text);
-        return response;
     }
 
     public void RestartSession(AgentSession activeSession)
@@ -45,15 +60,22 @@ internal class AgentRunner : IAgentRunner
                 {
                     _capture.WriteSystemMessage(message.Text);
                 }
-                else if (message.Role == ChatRole.Assistant)
+                else
                 {
-                    if (message.Contents.Any(x => x is FunctionCallContent or FunctionResultContent or TextReasoningContent))
+                    foreach (var content in message.Contents)
                     {
-                        _capture.WriteContent(message.Contents, message.AuthorName);
-                    }
-                    else
-                    {
-                        _capture.WriteAgentMessage(message.Text);
+                        if (content is FunctionCallContent callContent)
+                        {
+                            _capture.WriteToolCall(callContent.CallId, message.AuthorName, callContent.Name, callContent.Arguments);
+                        }
+                        else if (content is FunctionResultContent resultContent)
+                        {
+                            _capture.WriteToolResult(resultContent.CallId, resultContent.Exception?.Message ?? resultContent.Result?.ToString());
+                        }
+                        else if (content is TextContent textContent && !string.IsNullOrEmpty(textContent.Text))
+                        {
+                            _capture.WriteAgentMessage(textContent.Text);
+                        }
                     }
                 }
             }
