@@ -32,6 +32,7 @@ internal sealed class SystemPromptProvider : AIContextProvider
     private async Task<string> BuildPromptAsync(CancellationToken cancellationToken = default)
     {
         var builder = new StringBuilder();
+        builder.AppendLine("## System Prompt");
         builder.AppendLine($"当前操作系统是\"{Environment.OSVersion.VersionString}\"");
         builder.AppendLine($"当前工作目录是\"{_workDirectory}\"");
 

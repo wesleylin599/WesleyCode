@@ -1,5 +1,6 @@
 ﻿using System.ClientModel;
 using System.ClientModel.Primitives;
+using System.Security.Cryptography;
 using System.Text;
 using Anthropic;
 using Microsoft.Agents.AI;
@@ -9,7 +10,6 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OllamaSharp;
@@ -24,13 +24,15 @@ public static class ServiceCollectionExtensions
 {
     private const string AgentHttpClientName = "Wesley";
 
-    public static bool HasToolContent(this IList<AIContent> contents) =>
-        contents.Any(static content => content is FunctionCallContent or FunctionResultContent);
-
-    public static IHttpClientBuilder ConfigureHttpClientAgents(this IServiceCollection services, Action<HttpClient> configureClient)
+    public static string ComputeMd5(this string target)
     {
-        return services.AddHttpClient(AgentHttpClientName).ConfigureHttpClient(configureClient);
+        using var md5 = MD5.Create();
+        var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(target));
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
+
+    public static IHttpClientBuilder ConfigureHttpClientAgents(this IServiceCollection services, Action<HttpClient> configureClient) =>
+        services.AddHttpClient(AgentHttpClientName).ConfigureHttpClient(configureClient);
 
     public static IServiceCollection AddAgentHost(this IServiceCollection services, string workDirectory)
     {
@@ -91,7 +93,6 @@ public static class ServiceCollectionExtensions
             return new MemoryDistributedCache(Microsoft.Extensions.Options.Options.Create(cacheOptions));
         });
 
-        services.TryAddSingleton<IOutputCapture, NullOutputCapture>();
         services.AddSingleton<ISessionStore, SessionStore>();
         services.AddSingleton<IAgentRunner, AgentRunner>();
         services.AddAIProviders();

@@ -12,7 +12,5 @@ public interface IOutputCapture
 
     void WriteSystemMessage(string message);
 
-    void WriteThinkingMessage(string message);
-
-    void WriteTool(IList<AIContent> contents, string? target = null);
+    void WriteContent(IList<AIContent> contents, string? target = null);
 }

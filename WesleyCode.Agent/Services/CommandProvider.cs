@@ -32,6 +32,7 @@ internal sealed class CommandProvider : AIContextProvider
             new AIContext
             {
                 Instructions = $"""
+                ## Command
                 当前使用的命令行工具是`{FileName}`
                 命令行工具的工作目录在`{_options.Value.BasePath}`
                 使用`run_command`来调用命令行工具执行命令

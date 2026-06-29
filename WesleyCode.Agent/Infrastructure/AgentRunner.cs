@@ -1,6 +1,5 @@
 ﻿using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Services;
 
 namespace WesleyCode.Agent.Infrastructure;
@@ -18,8 +17,19 @@ internal class AgentRunner : IAgentRunner
 
     public ValueTask<AgentSession> CreateSessionAsync(CancellationToken cancellationToken = default) => _agent.CreateSessionAsync(cancellationToken);
 
-    public Task<AgentResponse> ExecuteAsync(string input, AgentSession session, CancellationToken cancellationToken = default) =>
-        _agent.ExecuteAsync(input, session, _capture, cancellationToken);
+    public async Task<AgentResponse> ExecuteAsync(string input, AgentSession session, CancellationToken cancellationToken = default)
+    {
+        var options = new AgentRunOptions();
+        var responseUpdates = new List<AgentResponseUpdate>();
+        await foreach (var agentResponse in _agent.RunStreamingAsync(input, session, options, cancellationToken))
+        {
+            responseUpdates.Add(agentResponse);
+            _capture.WriteContent(agentResponse.Contents, agentResponse.AuthorName);
+        }
+        var response = responseUpdates.ToAgentResponse();
+        _capture.WriteAgentMessage(response.Messages.Last().Text);
+        return response;
+    }
 
     public void RestartSession(AgentSession activeSession)
     {
@@ -35,17 +45,16 @@ internal class AgentRunner : IAgentRunner
                 {
                     _capture.WriteSystemMessage(message.Text);
                 }
-                else if (message.Contents.HasToolContent())
-                {
-                    _capture.WriteTool(message.Contents, message.AuthorName);
-                    if (!string.IsNullOrEmpty(message.Text))
-                    {
-                        _capture.WriteThinkingMessage(message.Text);
-                    }
-                }
                 else if (message.Role == ChatRole.Assistant)
                 {
-                    _capture.WriteAgentMessage(message.Text);
+                    if (message.Contents.Any(x => x is FunctionCallContent or FunctionResultContent or TextReasoningContent))
+                    {
+                        _capture.WriteContent(message.Contents, message.AuthorName);
+                    }
+                    else
+                    {
+                        _capture.WriteAgentMessage(message.Text);
+                    }
                 }
             }
         }

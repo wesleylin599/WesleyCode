@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Options;
-using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Options;
 using WesleyCode.Agent.Services;
 
@@ -149,8 +148,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 try
                 {
                     var response = await _agentRunner.ExecuteAsync(input, session, source.Token);
-                    var message = response.Messages.LastOrDefault(msg => !msg.Contents.HasToolContent());
-                    _outputCapture.WriteAgentMessage(message?.Text ?? "not selected");
                     MarkSessionDirty();
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)
