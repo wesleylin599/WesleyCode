@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using WesleyCode.Agent.Services;
+using WesleyCode.Agent.Interfaces;
 
 namespace WesleyCode.Agent.Infrastructure;
 

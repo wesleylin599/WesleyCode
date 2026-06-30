@@ -12,6 +12,7 @@ using Microsoft.Extensions.Options;
 using OllamaSharp;
 using OpenAI;
 using WesleyCode.Agent.Infrastructure;
+using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
 using WesleyCode.Agent.Services;
 
@@ -166,7 +167,6 @@ public static class ServiceCollectionExtensions
         var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
         var clientOptions = new OpenAIClientOptions
         {
-            MessageLoggingPolicy = new LoggingAuthPolicy(false, true, loggerFactory),
             NetworkTimeout = Timeout.InfiniteTimeSpan,
             Transport = new HttpClientPipelineTransport(httpClient),
         };
@@ -186,7 +186,7 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
         }
         var baseClient = CreateOpenAiChatClient(options, loggerFactory, httpClientFactory);
-        return CrsChatClient.Create(baseClient);
+        return new CrsChatClient(baseClient);
     }
 
     private static IChatClient CreateAnthropicChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)

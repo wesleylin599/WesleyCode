@@ -1,4 +1,4 @@
-﻿namespace WesleyCode.Agent.Services;
+﻿namespace WesleyCode.Agent.Interfaces;
 
 public interface IOutputCapture
 {

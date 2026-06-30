@@ -4,8 +4,8 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using WesleyCode.Agent.Extensions;
+using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
-using WesleyCode.Agent.Services;
 
 namespace WesleyCode.Agent.Infrastructure;
 

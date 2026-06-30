@@ -6,8 +6,6 @@ namespace WesleyCode.Agent.Infrastructure;
 [DebuggerStepThrough]
 public sealed class CrsChatClient : DelegatingChatClient
 {
-    public static CrsChatClient Create(IChatClient innerClient) => new(innerClient);
-
     public CrsChatClient(IChatClient innerClient)
         : base(innerClient) { }
 

@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Options;
+using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
-using WesleyCode.Agent.Services;
 
 namespace WesleyCode.Console.Hosting;
 

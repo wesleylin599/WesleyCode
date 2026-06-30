@@ -1,5 +1,5 @@
 ﻿using WesleyCode.Agent.Extensions;
-using WesleyCode.Agent.Services;
+using WesleyCode.Agent.Interfaces;
 using WesleyCode.Console.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);

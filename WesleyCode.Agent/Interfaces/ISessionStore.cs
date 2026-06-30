@@ -1,6 +1,6 @@
 ﻿using Microsoft.Agents.AI;
 
-namespace WesleyCode.Agent.Services;
+namespace WesleyCode.Agent.Interfaces;
 
 public interface ISessionStore
 {
