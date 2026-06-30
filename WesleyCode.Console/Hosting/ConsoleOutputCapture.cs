@@ -7,7 +7,7 @@ namespace WesleyCode.Console.Hosting;
 
 internal class ConsoleOutputCapture : IOutputCapture
 {
-    private const int MaxLogLength = 256;
+    private const int MaxLogLength = 512;
     private const string TruncatedSuffix = "[输出被截断，内容过长]";
 
     private static readonly Regex _whitespaceRegex = new(@"\s+", RegexOptions.Compiled);

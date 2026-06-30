@@ -36,11 +36,11 @@ internal class AgentRunner : IAgentRunner
                 else if (content is TextContent textContent)
                 {
                     builder.Append(textContent.Text);
-                    if (builder.Length > 0 && responseUpdate.FinishReason == ChatFinishReason.Stop)
-                    {
-                        _capture.WriteAgentMessage(builder.ToString());
-                        builder.Clear();
-                    }
+                }
+                if (builder.Length > 0 && responseUpdate.FinishReason == ChatFinishReason.Stop)
+                {
+                    _capture.WriteAgentMessage(builder.ToString());
+                    builder.Clear();
                 }
             }
         }

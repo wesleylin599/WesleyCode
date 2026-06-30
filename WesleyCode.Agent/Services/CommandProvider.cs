@@ -37,7 +37,7 @@ internal sealed class CommandProvider : AIContextProvider
                 命令行工具的工作目录在`{_options.Value.BasePath}`
                 使用`run_command`来调用命令行工具执行命令
                 """,
-                Tools = [AIFunctionFactory.Create(Command, new AIFunctionFactoryOptions { Name = "run_command", Description = "执行命令行" })],
+                Tools = [AIFunctionFactory.Create(Command, new AIFunctionFactoryOptions { Name = "command_run", Description = "执行命令行" })],
             }
         );
     }
