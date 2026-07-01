@@ -1,0 +1,352 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using Microsoft.Extensions.AI
+@using Microsoft.JSInterop
+@using WesleyCode.Web.Services
+@implements IDisposable
+@implements IAsyncDisposable
+@inject ChatWorkspaceService Workspace
+@inject IJSRuntime JSRuntime
+
+<PageTitle>WesleyCode Chat</PageTitle>
+
+<div class="chat-page">
+    <header class="chat-header">
+        <div>
+            <p class="page-title">WesleyCode 对话台</p>
+        </div>
+        <div class="status-pill @(Workspace.IsBusy ? "busy" : string.Empty)">
+            @(Workspace.IsBusy ? "生成中" : "已连接")
+        </div>
+    </header>
+
+    <section class="chat-thread" aria-live="polite">
+        @if (Turns.Count == 0)
+        {
+            <div class="empty-state">
+                <div class="empty-badge">AI</div>
+                <h3>开始一个新任务</h3>
+                <p>每轮会显示用户提问、最终回答，以及可展开的思考过程。</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var turn in Turns)
+            {
+                <article class="turn-block" @key="turn.Id">
+                    <article class="message-row user">
+                        <div class="message-avatar avatar-user">你</div>
+                        <div class="message-card message-user">
+                            <div class="message-meta">
+                                <span>@GetTitle(turn.UserMessage)</span>
+                                <time>@turn.UserMessage.CreatedAt?.LocalDateTime.ToString("HH:mm:ss")</time>
+                            </div>
+                            <div class="message-text">@turn.UserMessage.Text</div>
+                        </div>
+                    </article>
+
+                    @if (turn.ThoughtMessages.Count > 0)
+                    {
+                        <details class="thinking-block">
+                            <summary class="thinking-summary">
+                                <span>思考过程</span>
+                                <span class="thinking-summary-meta">@turn.ThoughtMessages.Count 条</span>
+                            </summary>
+                            <div class="thinking-list">
+                                @foreach (var message in turn.ThoughtMessages)
+                                {
+                                    <details class="thinking-entry @GetThinkingEntryClass(message.Role)" @key="message.MessageId">
+                                        <summary class="thinking-entry-summary">
+                                            <div class="thinking-entry-title-row">
+                                                <span class="thinking-entry-title">@GetTitle(message)</span>
+                                                <time>@message.CreatedAt?.LocalDateTime.ToString("HH:mm:ss")</time>
+                                            </div>
+                                            <div class="thinking-entry-preview">@GetPreview(message.Text)</div>
+                                        </summary>
+                                        <div class="thinking-entry-content">@message.Text</div>
+                                    </details>
+                                }
+                            </div>
+                        </details>
+                    }
+
+                    @if (turn.FinalAssistantMessage is not null)
+                    {
+                        <article class="message-row assistant">
+                            <div class="message-avatar avatar-assistant">W</div>
+                            <div class="message-card message-assistant">
+                                <div class="message-meta">
+                                    <span>@GetTitle(turn.FinalAssistantMessage)</span>
+                                    <time>@turn.FinalAssistantMessage.CreatedAt?.LocalDateTime.ToString("HH:mm:ss")</time>
+                                </div>
+                                <div class="message-text">@turn.FinalAssistantMessage.Text</div>
+                            </div>
+                        </article>
+                    }
+
+                    @foreach (var systemMessage in turn.SystemMessages)
+                    {
+                        <article class="message-row system" @key="systemMessage.MessageId">
+                            <div class="message-avatar avatar-system">S</div>
+                            <div class="message-card message-system">
+                                <div class="message-meta">
+                                    <span>@GetTitle(systemMessage)</span>
+                                    <time>@systemMessage.CreatedAt?.LocalDateTime.ToString("HH:mm:ss")</time>
+                                </div>
+                                <div class="message-text">@systemMessage.Text</div>
+                            </div>
+                        </article>
+                    }
+                </article>
+            }
+        }
+
+        @if (Workspace.IsBusy)
+        {
+            <article class="thinking-status-inline">
+                <div class="typing-dots" aria-label="正在生成">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <span>WesleyCode 正在思考并调用工具...</span>
+            </article>
+        }
+
+        <div class="chat-bottom-anchor" @ref="_bottomAnchor"></div>
+    </section>
+
+    <div class="composer-shell" @ref="_composerShell">
+        <div class="composer-hint">Enter 发送，Shift + Enter 手动换行。</div>
+        <div class="composer-panel">
+            <textarea
+                @ref="_composer"
+                class="composer-input"
+                placeholder="给 WesleyCode 下达任务，例如：为当前仓库添加一个可用的登录页。"
+                @bind="_input"
+                @bind:event="oninput"
+                disabled="@Workspace.IsBusy"></textarea>
+            <button class="send-button" @onclick="SendAsync" disabled="@(Workspace.IsBusy || string.IsNullOrWhiteSpace(_input))">发送</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _input = string.Empty;
+    private ElementReference _composer;
+    private ElementReference _composerShell;
+    private ElementReference _bottomAnchor;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<Home>? _selfReference;
+    private int _lastRenderMessageCount = -1;
+    private bool _lastBusyState;
+
+    private IReadOnlyList<ConversationTurn> Turns => BuildTurns(Workspace.Messages, Workspace.IsBusy);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Workspace.Changed += OnWorkspaceChanged;
+        await Workspace.InitializeAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/chatComposer.js");
+            _selfReference = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("registerSubmitOnEnter", _composer, _selfReference);
+            await _module.InvokeVoidAsync("registerAutoScroll", _bottomAnchor, _composerShell);
+        }
+
+        if (_module is null)
+        {
+            return;
+        }
+
+        if (firstRender || _lastRenderMessageCount != Workspace.Messages.Count || _lastBusyState != Workspace.IsBusy)
+        {
+            _lastRenderMessageCount = Workspace.Messages.Count;
+            _lastBusyState = Workspace.IsBusy;
+            await _module.InvokeVoidAsync("scrollToBottom", _bottomAnchor, _composerShell, firstRender);
+        }
+    }
+
+    public void Dispose()
+    {
+        Workspace.Changed -= OnWorkspaceChanged;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("disposeSubmitOnEnter", _composer);
+                await _module.InvokeVoidAsync("disposeAutoScroll", _bottomAnchor);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        _selfReference?.Dispose();
+    }
+
+    [JSInvokable]
+    public Task SubmitFromKeyboardAsync() => SendAsync();
+
+    private async Task SendAsync()
+    {
+        var input = _input.Trim();
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return;
+        }
+
+        _input = string.Empty;
+        await InvokeAsync(StateHasChanged);
+        await Workspace.SendAsync(input);
+    }
+
+    private void OnWorkspaceChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static IReadOnlyList<ConversationTurn> BuildTurns(IReadOnlyList<ChatMessage> messages, bool isBusy)
+    {
+        List<ConversationTurn> turns = [];
+        ConversationTurnBuilder? current = null;
+
+        foreach (var message in messages)
+        {
+            if (message.Role == ChatRole.User)
+            {
+                if (current is not null)
+                {
+                    turns.Add(current.Build());
+                }
+
+                current = new ConversationTurnBuilder(message);
+                continue;
+            }
+
+            if (current is null)
+            {
+                continue;
+            }
+
+            if (message.Role == ChatRole.Assistant)
+            {
+                current.FinalAssistantMessage = message;
+                current.ThoughtMessages.Add(message);
+            }
+            else if (message.Role == ChatRole.Tool)
+            {
+                current.ThoughtMessages.Add(message);
+            }
+            else if (message.Role == ChatRole.System)
+            {
+                current.SystemMessages.Add(message);
+            }
+        }
+
+        if (current is not null)
+        {
+            turns.Add(current.Build(isBusy));
+        }
+
+        return turns;
+    }
+
+    private static string GetPreview(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "无详细内容";
+        }
+
+        var singleLine = text.Replace("\r", " ").Replace("\n", " ").Trim();
+        return singleLine.Length <= 72 ? singleLine : $"{singleLine[..72]}...";
+    }
+
+    private static string GetTitle(ChatMessage message) =>
+        string.IsNullOrWhiteSpace(message.AuthorName) ? message.Role.Value : message.AuthorName;
+
+    private static string GetThinkingEntryClass(ChatRole role) => role == ChatRole.Assistant ? "thinking-entry-assistant" : "thinking-entry-tool";
+
+    private sealed class ConversationTurnBuilder
+    {
+        public ConversationTurnBuilder(ChatMessage userMessage)
+        {
+            UserMessage = userMessage;
+        }
+
+        public ChatMessage UserMessage { get; }
+
+        public List<ChatMessage> ThoughtMessages { get; } = [];
+
+        public List<ChatMessage> SystemMessages { get; } = [];
+
+        public ChatMessage? FinalAssistantMessage { get; set; }
+
+        public ConversationTurn Build(bool keepAssistantInThoughtsOnly = false)
+        {
+            List<ChatMessage> thoughts = [.. ThoughtMessages];
+            var finalAssistantMessage = keepAssistantInThoughtsOnly ? null : FinalAssistantMessage;
+            if (finalAssistantMessage?.MessageId is not null)
+            {
+                thoughts = thoughts.Where(message => message.MessageId != finalAssistantMessage.MessageId).ToList();
+            }
+
+            return new ConversationTurn(
+                UserMessage.MessageId ?? Guid.NewGuid().ToString("N"),
+                UserMessage,
+                finalAssistantMessage,
+                thoughts,
+                [.. SystemMessages]);
+        }
+    }
+
+    private sealed record ConversationTurn(
+        string Id,
+        ChatMessage UserMessage,
+        ChatMessage? FinalAssistantMessage,
+        IReadOnlyList<ChatMessage> ThoughtMessages,
+        IReadOnlyList<ChatMessage> SystemMessages);
+
+    private static string GetAvatarClass(ChatRole role) => role switch
+    {
+        var current when current == ChatRole.User => "avatar-user",
+        var current when current == ChatRole.Assistant => "avatar-assistant",
+        var current when current == ChatRole.System => "avatar-system",
+        _ => string.Empty,
+    };
+
+    private static string GetAvatarText(ChatRole role) => role switch
+    {
+        var current when current == ChatRole.User => "你",
+        var current when current == ChatRole.Assistant => "W",
+        var current when current == ChatRole.System => "S",
+        _ => "?",
+    };
+
+    private static string GetMessageCardClass(ChatRole role) => role switch
+    {
+        var current when current == ChatRole.User => "message-user",
+        var current when current == ChatRole.Assistant => "message-assistant",
+        var current when current == ChatRole.System => "message-system",
+        _ => string.Empty,
+    };
+
+    private static string GetMessageRowClass(ChatRole role) => role switch
+    {
+        var current when current == ChatRole.User => "user",
+        var current when current == ChatRole.Assistant => "assistant",
+        var current when current == ChatRole.System => "system",
+        _ => string.Empty,
+    };
+}

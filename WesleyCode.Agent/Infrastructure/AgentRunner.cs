@@ -25,15 +25,7 @@ internal class AgentRunner : IAgentRunner
         {
             foreach (var content in responseUpdate.Contents)
             {
-                if (content is FunctionCallContent callContent)
-                {
-                    _capture.WriteToolCall(callContent.CallId, responseUpdate.AuthorName, callContent.Name, callContent.Arguments);
-                }
-                else if (content is FunctionResultContent resultContent)
-                {
-                    _capture.WriteToolResult(resultContent.CallId, resultContent.Exception?.Message ?? resultContent.Result?.ToString());
-                }
-                else if (content is TextContent textContent)
+                if (content is TextContent textContent)
                 {
                     builder.Append(textContent.Text);
                 }
@@ -41,6 +33,15 @@ internal class AgentRunner : IAgentRunner
                 {
                     _capture.WriteAgentMessage(builder.ToString());
                     builder.Clear();
+                }
+                if (content is FunctionCallContent callContent)
+                {
+                    _capture.WriteToolCall(callContent.CallId, responseUpdate.AuthorName, callContent.Name, callContent.Arguments);
+                }
+                if (content is FunctionResultContent resultContent)
+                {
+                    var result = resultContent.Exception?.Message ?? resultContent.Result?.ToString();
+                    _capture.WriteToolResult(resultContent.CallId, responseUpdate.AuthorName, result);
                 }
             }
         }
@@ -68,11 +69,12 @@ internal class AgentRunner : IAgentRunner
                         {
                             _capture.WriteToolCall(callContent.CallId, message.AuthorName, callContent.Name, callContent.Arguments);
                         }
-                        else if (content is FunctionResultContent resultContent)
+                        if (content is FunctionResultContent resultContent)
                         {
-                            _capture.WriteToolResult(resultContent.CallId, resultContent.Exception?.Message ?? resultContent.Result?.ToString());
+                            var result = resultContent.Exception?.Message ?? resultContent.Result?.ToString();
+                            _capture.WriteToolResult(resultContent.CallId, message.AuthorName, result);
                         }
-                        else if (content is TextContent textContent && !string.IsNullOrEmpty(textContent.Text))
+                        if (content is TextContent textContent && !string.IsNullOrEmpty(textContent.Text))
                         {
                             _capture.WriteAgentMessage(textContent.Text);
                         }

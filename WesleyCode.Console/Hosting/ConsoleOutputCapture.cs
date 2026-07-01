@@ -37,8 +37,8 @@ internal class ConsoleOutputCapture : IOutputCapture
     public void WriteToolCall(string callId, string? target, string toolName, IDictionary<string, object?>? arguments) =>
         WriteBlock($"[{callId}] {target ?? "unknow"}:{toolName}", FormatToolArguments(arguments), ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
 
-    public void WriteToolResult(string callId, string? message) =>
-        WriteBlock($"[{callId}] Tool Result", TruncateLine(message), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
+    public void WriteToolResult(string callId, string? target, string? message) =>
+        WriteBlock($"[{callId}] {target ?? "unknow"}:result", TruncateLine(message), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
     private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)
     {

@@ -1,0 +1,64 @@
+﻿@using WesleyCode.Web.Services
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject ChatWorkspaceService Workspace
+
+<div class="shell">
+    <aside class="sidebar">
+        <div>
+            <div class="brand-mark">W</div>
+            <div class="brand-copy">
+                <p class="brand-eyebrow">WesleyCode</p>
+                <h1>Blazor 控制台</h1>
+                <p>以 ChatGPT 风格组织对话、工具轨迹与会话状态。</p>
+            </div>
+        </div>
+
+        <button class="sidebar-action" @onclick="CreateNewConversationAsync" disabled="@Workspace.IsBusy">
+            <span>+</span>
+            <span>新建对话</span>
+        </button>
+
+        <a class="sidebar-action sidebar-action-secondary" href="/workspace/archive">
+            <span>↓</span>
+            <span>下载工作区</span>
+        </a>
+
+        <section class="sidebar-section sidebar-status-card">
+            <span class="sidebar-label">状态</span>
+            <p>@(Workspace.IsBusy ? "正在生成响应..." : "已就绪，等待输入。")</p>
+        </section>
+    </aside>
+
+    <main class="workspace">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    页面发生未处理异常。
+    <a href="." class="reload">重新加载</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Workspace.Changed += OnWorkspaceChanged;
+    }
+
+    public void Dispose()
+    {
+        Workspace.Changed -= OnWorkspaceChanged;
+    }
+
+    private async Task CreateNewConversationAsync()
+    {
+        await Workspace.CreateNewConversationAsync();
+    }
+
+    private void OnWorkspaceChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+}

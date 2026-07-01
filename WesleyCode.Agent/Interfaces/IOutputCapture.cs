@@ -12,5 +12,5 @@ public interface IOutputCapture
 
     void WriteToolCall(string callId, string? target, string toolName, IDictionary<string, object?>? arguments);
 
-    void WriteToolResult(string callId, string? message);
+    void WriteToolResult(string callId, string? target, string? message);
 }
