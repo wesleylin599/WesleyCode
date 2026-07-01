@@ -15,6 +15,7 @@ public sealed class ChatWorkspaceService : IDisposable
     private readonly string _workspacePath;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly string _channelId = Guid.NewGuid().ToString("N");
+    private readonly FileSystemWatcher? _workspaceWatcher;
     private AgentSession? _session;
     private bool _initialized;
 
@@ -22,13 +23,15 @@ public sealed class ChatWorkspaceService : IDisposable
         IServiceProvider serviceProvider,
         IWebOutputCaptureState outputState,
         IOptions<WorkingOptions> workingOptions,
-        ILogger<ChatWorkspaceService> logger)
+        ILogger<ChatWorkspaceService> logger
+    )
     {
         _serviceProvider = serviceProvider;
         _outputState = outputState;
         _logger = logger;
         _workspacePath = workingOptions.Value.BasePath;
         _outputState.ChannelChanged += OnChannelChanged;
+        _workspaceWatcher = CreateWorkspaceWatcher();
     }
 
     public event Action? Changed;
@@ -36,6 +39,13 @@ public sealed class ChatWorkspaceService : IDisposable
     public bool IsBusy { get; private set; }
 
     public IReadOnlyList<ChatMessage> Messages => _outputState.GetMessages(_channelId);
+
+    public IReadOnlyList<WorkspaceEntryNode> WorkspaceEntries => GetWorkspaceEntries();
+
+    public void RefreshWorkspaceEntries()
+    {
+        NotifyChanged();
+    }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -153,6 +163,14 @@ public sealed class ChatWorkspaceService : IDisposable
     public void Dispose()
     {
         _outputState.ChannelChanged -= OnChannelChanged;
+        if (_workspaceWatcher is not null)
+        {
+            _workspaceWatcher.Created -= OnWorkspaceFilesChanged;
+            _workspaceWatcher.Changed -= OnWorkspaceFilesChanged;
+            _workspaceWatcher.Deleted -= OnWorkspaceFilesChanged;
+            _workspaceWatcher.Renamed -= OnWorkspaceFilesRenamed;
+            _workspaceWatcher.Dispose();
+        }
         _gate.Dispose();
     }
 
@@ -197,4 +215,77 @@ public sealed class ChatWorkspaceService : IDisposable
     {
         Changed?.Invoke();
     }
+
+    private FileSystemWatcher? CreateWorkspaceWatcher()
+    {
+        if (string.IsNullOrWhiteSpace(_workspacePath))
+        {
+            return null;
+        }
+
+        var fullPath = Path.GetFullPath(_workspacePath);
+        Directory.CreateDirectory(fullPath);
+
+        var watcher = new FileSystemWatcher(fullPath)
+        {
+            IncludeSubdirectories = true,
+            NotifyFilter = NotifyFilters.DirectoryName | NotifyFilters.FileName | NotifyFilters.LastWrite,
+            EnableRaisingEvents = true,
+        };
+
+        watcher.Created += OnWorkspaceFilesChanged;
+        watcher.Changed += OnWorkspaceFilesChanged;
+        watcher.Deleted += OnWorkspaceFilesChanged;
+        watcher.Renamed += OnWorkspaceFilesRenamed;
+        return watcher;
+    }
+
+    private void OnWorkspaceFilesChanged(object? sender, FileSystemEventArgs e)
+    {
+        NotifyChanged();
+    }
+
+    private void OnWorkspaceFilesRenamed(object? sender, RenamedEventArgs e)
+    {
+        NotifyChanged();
+    }
+
+    private IReadOnlyList<WorkspaceEntryNode> GetWorkspaceEntries()
+    {
+        if (string.IsNullOrWhiteSpace(_workspacePath))
+        {
+            return [];
+        }
+
+        var fullPath = Path.GetFullPath(_workspacePath);
+        if (!Directory.Exists(fullPath))
+        {
+            return [];
+        }
+
+        return BuildWorkspaceEntries(fullPath, fullPath);
+    }
+
+    private static IReadOnlyList<WorkspaceEntryNode> BuildWorkspaceEntries(string rootPath, string currentPath)
+    {
+        List<WorkspaceEntryNode> entries = [];
+
+        foreach (var directoryPath in Directory.GetDirectories(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            var directoryName = Path.GetFileName(directoryPath);
+            var relativePath = Path.GetRelativePath(rootPath, directoryPath).Replace('\\', '/');
+            entries.Add(new WorkspaceEntryNode(directoryName, relativePath, true, BuildWorkspaceEntries(rootPath, directoryPath)));
+        }
+
+        foreach (var filePath in Directory.GetFiles(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            var fileName = Path.GetFileName(filePath);
+            var relativePath = Path.GetRelativePath(rootPath, filePath).Replace('\\', '/');
+            entries.Add(new WorkspaceEntryNode(fileName, relativePath, false, []));
+        }
+
+        return entries;
+    }
+
+    public sealed record WorkspaceEntryNode(string Name, string RelativePath, bool IsDirectory, IReadOnlyList<WorkspaceEntryNode> Children);
 }
