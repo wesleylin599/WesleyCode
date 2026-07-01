@@ -125,7 +125,7 @@ internal sealed class CommandProvider : AIContextProvider
     }
 }
 
-public sealed class CommandItem
+sealed class CommandItem
 {
     [JsonPropertyName("command")]
     public string Command { get; set; } = string.Empty;
@@ -134,7 +134,7 @@ public sealed class CommandItem
     public int TimeoutSeconds { get; set; }
 }
 
-public sealed class CommandResult
+sealed class CommandResult
 {
     [JsonPropertyName("exit_code")]
     public int ExitCode { get; set; }

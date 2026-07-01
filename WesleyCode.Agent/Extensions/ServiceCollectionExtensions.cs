@@ -87,15 +87,14 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<AIContextProvider, WorkspaceFilePolicyProvider>();
 
+        services.AddSingleton<AIContextProvider>(provider => new UserSkillsProvider(Path.Combine(AppContext.BaseDirectory, "skills")));
+
         services.AddSingleton<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
         services.AddSingleton<AIContextProvider>(provider => new AgentSkillsProvider(
-            skillPaths:
-            [
-                Path.Combine(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath, "skills"),
-                Path.Combine(AppContext.BaseDirectory, "skills"),
-            ],
-            loggerFactory: provider.GetRequiredService<ILoggerFactory>()
+            skillPaths: [Path.Combine(AppContext.BaseDirectory, "skills")],
+            loggerFactory: provider.GetRequiredService<ILoggerFactory>(),
+            scriptRunner: CliWrapSkillScriptRunner.RunAsync
         ));
 
         services.AddSingleton<AIContextProvider>(provider => new SystemPromptProvider(

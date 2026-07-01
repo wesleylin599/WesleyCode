@@ -37,8 +37,8 @@ internal class ConsoleOutputCapture : IOutputCapture
     public void WriteToolCall(string callId, string? target, string toolName, IDictionary<string, object?>? arguments) =>
         WriteBlock($"[{callId}] {target ?? "unknow"}:{toolName}", FormatToolArguments(arguments), ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
 
-    public void WriteToolResult(string callId, string? target, string? message) =>
-        WriteBlock($"[{callId}] {target ?? "unknow"}:result", TruncateLine(message), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
+    public void WriteToolResult(string callId, string? target, object? result) =>
+        WriteBlock($"[{callId}] {target ?? "unknow"}:result", TruncateLine(result), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
     private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)
     {
@@ -60,7 +60,7 @@ internal class ConsoleOutputCapture : IOutputCapture
             return "(no args)";
         }
 
-        return TruncateLine(JsonSerializer.Serialize(arguments, _options));
+        return TruncateLine(arguments);
     }
 
     private static IEnumerable<string> Normalize(string? message)
@@ -78,11 +78,12 @@ internal class ConsoleOutputCapture : IOutputCapture
         }
     }
 
-    private static string TruncateLine(string? message)
+    private static string TruncateLine(object? result)
     {
-        if (string.IsNullOrEmpty(message))
+        if (result == null)
             return "null";
 
+        var message = JsonSerializer.Serialize(result, _options);
         var output = CompactOutput(message);
         if (output.Length <= MaxLogLength)
         {

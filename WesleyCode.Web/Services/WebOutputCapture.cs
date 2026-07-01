@@ -1,6 +1,6 @@
-﻿using Microsoft.Extensions.AI;
-using System.Text.Encodings.Web;
+﻿using System.Text.Encodings.Web;
 using System.Text.Json;
+using Microsoft.Extensions.AI;
 using WesleyCode.Agent.Interfaces;
 using WesleyCode.Web.Interfaces;
 
@@ -32,13 +32,12 @@ public sealed class WebOutputCapture : IOutputCapture
     public void WriteToolCall(string callId, string? target, string toolName, IDictionary<string, object?>? arguments)
     {
         var title = $"{target ?? "unknow"} - {callId} - {toolName}";
-        var content = arguments is { Count: > 0 } ? JsonSerializer.Serialize(arguments, JsonOptions) : "无参数";
-        _state.AddCurrentMessage(ChatRole.Tool, title, content);
+        _state.AddCurrentMessage(ChatRole.Tool, title, JsonSerializer.Serialize(arguments, JsonOptions));
     }
 
-    public void WriteToolResult(string callId, string? target, string? message)
+    public void WriteToolResult(string callId, string? target, object? result)
     {
         var title = $"{target ?? "unknow"} - {callId} - result";
-        _state.AddCurrentMessage(ChatRole.Tool, title, message ?? "空结果");
+        _state.AddCurrentMessage(ChatRole.Tool, title, result?.ToString() ?? string.Empty);
     }
 }

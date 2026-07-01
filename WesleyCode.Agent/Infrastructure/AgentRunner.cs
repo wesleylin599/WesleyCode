@@ -20,31 +20,49 @@ internal class AgentRunner : IAgentRunner
 
     public async Task ExecuteAsync(string input, AgentSession session, CancellationToken cancellationToken = default)
     {
-        StringBuilder builder = new StringBuilder();
-        await foreach (var responseUpdate in _agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
+        List<ChatMessage> inputMessages = [new ChatMessage(ChatRole.User, input)];
+        do
         {
-            foreach (var content in responseUpdate.Contents)
+            bool isText = false;
+            StringBuilder builder = new StringBuilder();
+            List<ToolApprovalRequestContent> toolApprovals = new List<ToolApprovalRequestContent>();
+            await foreach (var responseUpdate in _agent.RunStreamingAsync(inputMessages, session, cancellationToken: cancellationToken))
             {
-                if (content is TextContent textContent)
+                foreach (var content in responseUpdate.Contents)
                 {
-                    builder.Append(textContent.Text);
-                }
-                if (builder.Length > 0 && responseUpdate.FinishReason == ChatFinishReason.Stop)
-                {
-                    _capture.WriteAgentMessage(builder.ToString());
-                    builder.Clear();
-                }
-                if (content is FunctionCallContent callContent)
-                {
-                    _capture.WriteToolCall(callContent.CallId, responseUpdate.AuthorName, callContent.Name, callContent.Arguments);
-                }
-                if (content is FunctionResultContent resultContent)
-                {
-                    var result = resultContent.Exception?.Message ?? resultContent.Result?.ToString();
-                    _capture.WriteToolResult(resultContent.CallId, responseUpdate.AuthorName, result);
+                    if (content is TextContent textContent)
+                    {
+                        builder.Append(textContent.Text);
+                        isText = true;
+                    }
+                    if (builder.Length > 0 && !isText)
+                    {
+                        _capture.WriteAgentMessage(builder.ToString());
+                        builder.Clear();
+                    }
+                    if (content is FunctionCallContent callContent)
+                    {
+                        _capture.WriteToolCall(callContent.CallId, responseUpdate.AuthorName, callContent.Name, callContent.Arguments);
+                    }
+                    if (content is FunctionResultContent resultContent)
+                    {
+                        var result = resultContent.Exception?.Message ?? resultContent.Result;
+                        _capture.WriteToolResult(resultContent.CallId, responseUpdate.AuthorName, result);
+                    }
+                    if (content is ToolApprovalRequestContent approvalRequestContent)
+                    {
+                        toolApprovals.Add(approvalRequestContent);
+                    }
+                    isText = false;
                 }
             }
-        }
+            if (builder.Length > 0 && !isText)
+            {
+                _capture.WriteAgentMessage(builder.ToString());
+                builder.Clear();
+            }
+            inputMessages = toolApprovals.Select(x => new ChatMessage(ChatRole.User, [x.CreateResponse(true)])).ToList();
+        } while (inputMessages.Count > 0);
     }
 
     public void RestartSession(AgentSession activeSession)
@@ -53,11 +71,11 @@ internal class AgentRunner : IAgentRunner
         {
             foreach (var message in history)
             {
-                if (message.Role == ChatRole.User)
+                if (message.Role == ChatRole.User && !string.IsNullOrEmpty(message.Text))
                 {
                     _capture.WriteUserMessage(message.Text);
                 }
-                else if (message.Role == ChatRole.System)
+                else if (message.Role == ChatRole.System && !string.IsNullOrEmpty(message.Text))
                 {
                     _capture.WriteSystemMessage(message.Text);
                 }
@@ -71,7 +89,7 @@ internal class AgentRunner : IAgentRunner
                         }
                         if (content is FunctionResultContent resultContent)
                         {
-                            var result = resultContent.Exception?.Message ?? resultContent.Result?.ToString();
+                            var result = resultContent.Exception?.Message ?? resultContent.Result;
                             _capture.WriteToolResult(resultContent.CallId, message.AuthorName, result);
                         }
                         if (content is TextContent textContent && !string.IsNullOrEmpty(textContent.Text))
