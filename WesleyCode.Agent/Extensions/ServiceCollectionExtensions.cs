@@ -45,10 +45,10 @@ public static class ServiceCollectionExtensions
             .Configure<IConfiguration>(
                 (options, configuration) =>
                 {
-                    options.Provider = configuration.GetValue<string>("WINTEAM_PROVIDER");
-                    options.ModelId = configuration.GetValue<string>("WINTEAM_MODELID");
-                    options.BaseUrl = configuration.GetValue<string>("WINTEAM_BASEURL");
-                    options.ApiKey = configuration.GetValue<string>("WINTEAM_APIKEY");
+                    options.Provider = configuration.GetValue<string>("WESLEY_PROVIDER");
+                    options.ModelId = configuration.GetValue<string>("WESLEY_MODELID");
+                    options.BaseUrl = configuration.GetValue<string>("WESLEY_BASEURL");
+                    options.ApiKey = configuration.GetValue<string>("WESLEY_APIKEY");
                 }
             );
         services
@@ -113,18 +113,7 @@ public static class ServiceCollectionExtensions
             var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
             var options = provider.GetRequiredService<IOptions<ChatClientOptions>>();
             var working = provider.GetRequiredService<IOptions<WorkingOptions>>();
-
             var client = CreateChatClient(options.Value, loggerFactory, provider.GetRequiredService<IHttpClientFactory>());
-            StringBuilder builder = new StringBuilder();
-            builder.AppendLine($"Provider:{options.Value.Provider}");
-            if (!string.IsNullOrWhiteSpace(options.Value.BaseUrl))
-            {
-                builder.AppendLine($"BaseUrl:{options.Value.BaseUrl}");
-            }
-            builder.AppendLine($"ModelId:{options.Value.ModelId}");
-            builder.AppendLine($"Working:{working.Value.BasePath}");
-            provider.GetRequiredService<IOutputCapture>().WriteSystemMessage(builder.ToString());
-
             return client.AsBuilder().UseFunctionInvocation().UseLogging(loggerFactory).Build();
         });
 
@@ -147,7 +136,7 @@ public static class ServiceCollectionExtensions
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
-            throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
+            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
         }
         var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
         var clientOptions = new OpenAIClientOptions
@@ -168,7 +157,7 @@ public static class ServiceCollectionExtensions
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
-            throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
+            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
         }
         var baseClient = CreateOpenAiChatClient(options, loggerFactory, httpClientFactory);
         return new CrsChatClient(baseClient);
@@ -178,7 +167,7 @@ public static class ServiceCollectionExtensions
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
-            throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
+            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
         }
         var endpoint = GetEndpoint(options.BaseUrl);
         var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
@@ -198,16 +187,16 @@ public static class ServiceCollectionExtensions
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
-            throw new InvalidOperationException("未配置 API Key，请设置 WINTEAM_APIKEY。");
+            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
         }
         if (string.IsNullOrWhiteSpace(options.ModelId))
         {
-            throw new InvalidOperationException("未配置 Model Id，请设置 WINTEAM_MODELID。");
+            throw new InvalidOperationException("未配置 Model Id，请设置 WESLEY_MODELID。");
         }
         var endpoint = GetEndpoint(options.BaseUrl);
         if (endpoint is null)
         {
-            throw new InvalidOperationException("未配置 BaseUrl，请设置 WINTEAM_BASEURL。");
+            throw new InvalidOperationException("未配置 BaseUrl，请设置 WESLEY_BASEURL。");
         }
         var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
         httpClient.BaseAddress = endpoint;

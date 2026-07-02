@@ -21,7 +21,7 @@ public sealed class WebOutputCapture : IOutputCapture
         _state = state;
     }
 
-    public void WritePrompt() { }
+    public void WriteUserTitle() { }
 
     public void WriteUserMessage(string message) => _state.AddCurrentMessage(ChatRole.User, "你", message);
 

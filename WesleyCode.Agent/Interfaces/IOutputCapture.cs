@@ -2,7 +2,7 @@
 
 public interface IOutputCapture
 {
-    void WritePrompt();
+    void WriteUserTitle();
 
     void WriteUserMessage(string message);
 

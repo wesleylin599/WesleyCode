@@ -19,7 +19,7 @@ internal class ConsoleOutputCapture : IOutputCapture
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    public void WritePrompt()
+    public void WriteUserTitle()
     {
         System.Console.ResetColor();
         System.Console.ForegroundColor = ConsoleColor.Cyan;

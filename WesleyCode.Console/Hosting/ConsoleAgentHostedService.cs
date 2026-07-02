@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Options;
 using WesleyCode.Agent.Interfaces;
@@ -12,8 +13,10 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private readonly ISessionStore _sessionStore;
     private readonly IOutputCapture _outputCapture;
     private readonly IHostApplicationLifetime _lifetime;
+    private readonly IOptions<WorkingOptions> _workingOptions;
+    private readonly IOptions<SessionOptions> _sessionOptions;
+    private readonly IOptions<ChatClientOptions> _chatClientOptions;
     private readonly ILogger<ConsoleAgentHostedService> _logger;
-    private readonly SessionOptions _sessionOptions;
     private DateTimeOffset _lastSavedAt;
     private bool _sessionDirty;
 
@@ -22,16 +25,26 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         ISessionStore sessionStore,
         IOutputCapture outputCapture,
         IHostApplicationLifetime lifetime,
+        IOptions<WorkingOptions> workingOptions,
         IOptions<SessionOptions> sessionOptions,
+        IOptions<ChatClientOptions> chatClientOptions,
         ILogger<ConsoleAgentHostedService> logger
     )
     {
-        _agentRunner = agentRunner;
-        _sessionStore = sessionStore;
-        _outputCapture = outputCapture;
-        _lifetime = lifetime;
-        _sessionOptions = sessionOptions.Value;
-        _logger = logger;
+        this._agentRunner = agentRunner;
+        this._sessionStore = sessionStore;
+        this._outputCapture = outputCapture;
+        this._lifetime = lifetime;
+        this._workingOptions = workingOptions;
+        this._sessionOptions = sessionOptions;
+        this._chatClientOptions = chatClientOptions;
+        this._logger = logger;
+    }
+
+    public override Task StartAsync(CancellationToken cancellationToken)
+    {
+        LogConfig();
+        return base.StartAsync(cancellationToken);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -114,7 +127,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             try
             {
                 await Task.Delay(100, stoppingToken);
-                _outputCapture.WritePrompt();
+                _outputCapture.WriteUserTitle();
                 var input = System.Console.ReadLine();
                 if (input is null)
                 {
@@ -137,7 +150,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     System.Console.Clear();
                     await _sessionStore.ClearAsync(stoppingToken);
                     MarkSessionDirty();
-                    _outputCapture.WriteSystemMessage("会话已重置。");
+                    LogConfig();
                     session = await _agentRunner.CreateSessionAsync(stoppingToken);
                     continue;
                 }
@@ -181,7 +194,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             return false;
         }
 
-        var debounceSeconds = _sessionOptions.SaveDebounceSeconds;
+        var debounceSeconds = _sessionOptions.Value.SaveDebounceSeconds;
         if (debounceSeconds <= 0)
         {
             return true;
@@ -194,5 +207,18 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private void MarkSessionDirty()
     {
         _sessionDirty = true;
+    }
+
+    private void LogConfig()
+    {
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine($"Provider:{_chatClientOptions.Value.Provider}");
+        if (!string.IsNullOrWhiteSpace(_chatClientOptions.Value.BaseUrl))
+        {
+            builder.AppendLine($"BaseUrl:{_chatClientOptions.Value.BaseUrl}");
+        }
+        builder.AppendLine($"ModelId:{_chatClientOptions.Value.ModelId}");
+        builder.AppendLine($"Working:{_workingOptions.Value.BasePath}");
+        _outputCapture.WriteSystemMessage(builder.ToString());
     }
 }
