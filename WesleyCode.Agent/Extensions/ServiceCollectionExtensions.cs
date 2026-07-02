@@ -93,6 +93,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<AIContextProvider>(provider => new AgentSkillsProvider(
             skillPaths: [Path.Combine(AppContext.BaseDirectory, "skills")],
+            options: new AgentSkillsProviderOptions { DisableCaching = true },
             loggerFactory: provider.GetRequiredService<ILoggerFactory>(),
             scriptRunner: CliWrapSkillScriptRunner.RunAsync
         ));
