@@ -17,6 +17,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private readonly IOptions<SessionOptions> _sessionOptions;
     private readonly IOptions<ChatClientOptions> _chatClientOptions;
     private readonly ILogger<ConsoleAgentHostedService> _logger;
+
     private DateTimeOffset _lastSavedAt;
     private bool _sessionDirty;
 

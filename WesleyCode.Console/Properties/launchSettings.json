@@ -3,7 +3,7 @@
         "WesleyCode": {
             "commandName": "Project",
             "environmentVariables": {
-                "DOTNET_ENVIRONMENT": "openai"
+                "DOTNET_ENVIRONMENT": "ollama"
             },
             "hotReloadEnabled": true
         }

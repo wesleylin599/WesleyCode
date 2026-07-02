@@ -1,5 +1,5 @@
-﻿using Microsoft.Extensions.AI;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
+using Microsoft.Extensions.AI;
 using WesleyCode.Web.Interfaces;
 
 namespace WesleyCode.Web.Services;
