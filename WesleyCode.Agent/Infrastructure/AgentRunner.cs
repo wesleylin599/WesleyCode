@@ -1,7 +1,11 @@
 ﻿using System.Text;
+using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using WesleyCode.Agent.Interfaces;
+using WesleyCode.Agent.Options;
 
 namespace WesleyCode.Agent.Infrastructure;
 
@@ -10,13 +14,27 @@ internal class AgentRunner : IAgentRunner
     private readonly AIAgent _agent;
     private readonly IOutputCapture _capture;
 
-    public AgentRunner(AIAgent agent, IOutputCapture capture)
+    public AgentRunner(IChatClient client, IOutputCapture capture, IServiceProvider provider, IOptions<AgentOptions> options)
     {
-        this._agent = agent;
+        this._agent = client.AsAIAgent(
+            options: new ChatClientAgentOptions
+            {
+                Name = options.Value.Name,
+                Description = options.Value.Description,
+                ChatOptions = new ChatOptions { Instructions = options.Value.Instructions },
+                AIContextProviders = provider.GetServices<AIContextProvider>(),
+            }
+        );
         this._capture = capture;
     }
 
     public ValueTask<AgentSession> CreateSessionAsync(CancellationToken cancellationToken = default) => _agent.CreateSessionAsync(cancellationToken);
+
+    public ValueTask<JsonElement> SerializeSessionAsync(AgentSession session, CancellationToken cancellationToken = default) =>
+        _agent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
+
+    public ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedState, CancellationToken cancellationToken = default) =>
+        _agent.DeserializeSessionAsync(serializedState, cancellationToken: cancellationToken);
 
     public async Task ExecuteAsync(string input, AgentSession session, CancellationToken cancellationToken = default)
     {

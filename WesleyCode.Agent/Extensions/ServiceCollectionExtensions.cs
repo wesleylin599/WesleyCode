@@ -71,7 +71,7 @@ public static class ServiceCollectionExtensions
                 config.DirectoryName = "session";
             });
 
-        services.AddSingleton<ISessionStore, SessionStore>();
+        services.AddTransient<ISessionStore, SessionStore>();
         services.AddSingleton<IAgentRunner, AgentRunner>();
         services.AddAIProviders();
         services.AddAIAgent();
@@ -81,24 +81,24 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAIProviders(this IServiceCollection services)
     {
-        services.AddSingleton<AIContextProvider, CommandProvider>();
+        services.AddTransient<AIContextProvider, CommandProvider>();
 
-        services.AddSingleton<AIContextProvider, AgentModeProvider>();
+        services.AddTransient<AIContextProvider, AgentModeProvider>();
 
-        services.AddSingleton<AIContextProvider, WorkspaceFilePolicyProvider>();
+        services.AddTransient<AIContextProvider, WorkspaceFilePolicyProvider>();
 
-        services.AddSingleton<AIContextProvider>(provider => new UserSkillsProvider(Path.Combine(AppContext.BaseDirectory, "skills")));
+        services.AddTransient<AIContextProvider>(provider => new UserSkillsProvider(Path.Combine(AppContext.BaseDirectory, "skills")));
 
-        services.AddSingleton<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
+        services.AddTransient<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
-        services.AddSingleton<AIContextProvider>(provider => new AgentSkillsProvider(
+        services.AddTransient<AIContextProvider>(provider => new AgentSkillsProvider(
             skillPaths: [Path.Combine(AppContext.BaseDirectory, "skills")],
             options: new AgentSkillsProviderOptions { DisableCaching = true },
             loggerFactory: provider.GetRequiredService<ILoggerFactory>(),
             scriptRunner: CliWrapSkillScriptRunner.RunAsync
         ));
 
-        services.AddSingleton<AIContextProvider>(provider => new SystemPromptProvider(
+        services.AddTransient<AIContextProvider>(provider => new SystemPromptProvider(
             provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath,
             provider.GetRequiredService<ILoggerFactory>()
         ));
@@ -128,21 +128,6 @@ public static class ServiceCollectionExtensions
             return client.AsBuilder().UseFunctionInvocation().UseLogging(loggerFactory).Build();
         });
 
-        services.AddSingleton<AIAgent>(provider =>
-        {
-            var options = provider.GetRequiredService<IOptions<AgentOptions>>();
-            return provider
-                .GetRequiredService<IChatClient>()
-                .AsAIAgent(
-                    options: new ChatClientAgentOptions
-                    {
-                        Name = options.Value.Name,
-                        Description = options.Value.Description,
-                        ChatOptions = new ChatOptions { Instructions = options.Value.Instructions },
-                        AIContextProviders = provider.GetServices<AIContextProvider>(),
-                    }
-                );
-        });
         return services;
     }
 

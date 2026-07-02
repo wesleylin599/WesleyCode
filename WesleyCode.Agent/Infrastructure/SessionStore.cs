@@ -12,13 +12,13 @@ namespace WesleyCode.Agent.Infrastructure;
 public sealed class SessionStore : ISessionStore
 {
     private static readonly UTF8Encoding SessionEncoding = new(true);
-    private readonly AIAgent _agentRunner;
+    private readonly IAgentRunner _agentRunner;
     private readonly SessionOptions _options;
     private readonly ILogger<SessionStore> _logger;
     private readonly string _sessionHistoryPath;
     private readonly SemaphoreSlim _fileLock = new(1, 1);
 
-    public SessionStore(AIAgent agentRunner, IOptions<WorkingOptions> working, IOptions<SessionOptions> options, ILogger<SessionStore> logger)
+    public SessionStore(IAgentRunner agentRunner, IOptions<WorkingOptions> working, IOptions<SessionOptions> options, ILogger<SessionStore> logger)
     {
         _agentRunner = agentRunner;
         _options = options.Value;
