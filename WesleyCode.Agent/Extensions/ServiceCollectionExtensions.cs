@@ -91,12 +91,17 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
-        services.AddTransient<AIContextProvider>(provider => new AgentSkillsProvider(
-            skillPaths: [Path.Combine(AppContext.BaseDirectory, "skills")],
-            options: new AgentSkillsProviderOptions { DisableCaching = true },
-            loggerFactory: provider.GetRequiredService<ILoggerFactory>(),
-            scriptRunner: CliWrapSkillScriptRunner.RunAsync
-        ));
+        services.AddTransient<AIContextProvider>(provider =>
+            new AgentSkillsProviderBuilder()
+                .UseFileSkills([
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex", "skills"),
+                    Path.Combine(AppContext.BaseDirectory, "skills"),
+                ])
+                .UseLoggerFactory(provider.GetRequiredService<ILoggerFactory>())
+                .UseFileScriptRunner(CliWrapSkillScriptRunner.RunAsync)
+                .DisableCaching()
+                .Build()
+        );
 
         services.AddTransient<AIContextProvider>(provider => new SystemPromptProvider(
             provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath,
