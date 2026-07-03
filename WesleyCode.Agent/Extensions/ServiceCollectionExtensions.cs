@@ -93,10 +93,7 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<AIContextProvider>(provider =>
             new AgentSkillsProviderBuilder()
-                .UseFileSkills([
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex", "skills"),
-                    Path.Combine(AppContext.BaseDirectory, "skills"),
-                ])
+                .UseFileSkill(Path.Combine(AppContext.BaseDirectory, "skills"))
                 .UseLoggerFactory(provider.GetRequiredService<ILoggerFactory>())
                 .UseFileScriptRunner(CliWrapSkillScriptRunner.RunAsync)
                 .DisableCaching()

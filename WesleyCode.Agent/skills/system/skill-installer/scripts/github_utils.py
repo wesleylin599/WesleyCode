@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared GitHub helpers for skill install scripts."""
+"""共享的 GitHub 辅助方法。"""
 
 from __future__ import annotations
 

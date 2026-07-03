@@ -1,5 +1,5 @@
 interface:
-  display_name: "Skill Installer"
-  short_description: "Install curated skills from openai/skills or other repos"
+  display_name: "技能安装器"
+  short_description: "列出、下载并安装本地 skills"
   icon_small: "./assets/skill-installer-small.svg"
   icon_large: "./assets/skill-installer.png"
