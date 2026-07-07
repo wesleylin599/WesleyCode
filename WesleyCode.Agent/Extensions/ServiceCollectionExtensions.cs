@@ -56,12 +56,7 @@ public static class ServiceCollectionExtensions
             .Configure(config =>
             {
                 config.Name = "main";
-                config.Description = "全自动智能体";
-                config.Instructions = """
-                调用工具高效完成用户需求
-                行动优先不要过多询问
-                完成后进行校验
-                """;
+                config.Instructions = "调用工具高效完成用户需求,行动优先不要过多询问,完成后进行校验";
             });
 
         services
@@ -81,29 +76,28 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAIProviders(this IServiceCollection services)
     {
+        var skills = Path.Combine(AppContext.BaseDirectory, "skills");
+
         services.AddTransient<AIContextProvider, CommandProvider>();
 
         services.AddTransient<AIContextProvider, AgentModeProvider>();
 
+        services.AddTransient<AIContextProvider, SystemPromptProvider>();
+
         services.AddTransient<AIContextProvider, WorkspaceFilePolicyProvider>();
 
-        services.AddTransient<AIContextProvider>(provider => new UserSkillsProvider(Path.Combine(AppContext.BaseDirectory, "skills")));
+        services.AddTransient<AIContextProvider>(provider => new UserSkillsProvider(skills));
 
         services.AddTransient<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
         services.AddTransient<AIContextProvider>(provider =>
             new AgentSkillsProviderBuilder()
-                .UseFileSkill(Path.Combine(AppContext.BaseDirectory, "skills"))
                 .UseLoggerFactory(provider.GetRequiredService<ILoggerFactory>())
                 .UseFileScriptRunner(CliWrapSkillScriptRunner.RunAsync)
+                .UseFileSkill(skills)
                 .DisableCaching()
                 .Build()
         );
-
-        services.AddTransient<AIContextProvider>(provider => new SystemPromptProvider(
-            provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath,
-            provider.GetRequiredService<ILoggerFactory>()
-        ));
 
         return services;
     }
@@ -112,57 +106,29 @@ public static class ServiceCollectionExtensions
     {
         services.AddChatClient(provider =>
         {
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-            var options = provider.GetRequiredService<IOptions<ChatClientOptions>>();
-            var working = provider.GetRequiredService<IOptions<WorkingOptions>>();
-            var client = CreateChatClient(options.Value, loggerFactory, provider.GetRequiredService<IHttpClientFactory>());
-            return client.AsBuilder().UseFunctionInvocation().UseLogging(loggerFactory).Build();
+            return CreateChatClient(
+                    provider.GetRequiredService<IOptions<ChatClientOptions>>().Value,
+                    provider.GetRequiredService<IHttpClientFactory>()
+                )
+                .AsBuilder()
+                .UseFunctionInvocation()
+                .UseLogging(provider.GetRequiredService<ILoggerFactory>())
+                .Build();
         });
 
         return services;
     }
 
-    private static IChatClient CreateChatClient(ChatClientOptions options, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory)
+    private static IChatClient CreateChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
     {
         return options.Provider switch
         {
             "anthropic" => CreateAnthropicChatClient(options, httpClientFactory),
-            "openai" => CreateOpenAiChatClient(options, loggerFactory, httpClientFactory),
-            "crs" => CreateCrsChatClient(options, loggerFactory, httpClientFactory),
             "ollama" => CreateOllamaChatClient(options, httpClientFactory),
+            "openai" => CreateOpenAiChatClient(options, httpClientFactory),
+            "crs" => CreateCrsChatClient(options, httpClientFactory),
             _ => throw new InvalidOperationException($"不支持的 IChatClient Provider: {options.Provider}。可选值: openai、anthropic、crs、ollama。"),
         };
-    }
-
-    private static IChatClient CreateOpenAiChatClient(ChatClientOptions options, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory)
-    {
-        if (string.IsNullOrWhiteSpace(options.ApiKey))
-        {
-            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
-        }
-        var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
-        var clientOptions = new OpenAIClientOptions
-        {
-            NetworkTimeout = Timeout.InfiniteTimeSpan,
-            Transport = new HttpClientPipelineTransport(httpClient),
-        };
-        var endpoint = GetEndpoint(options.BaseUrl);
-        if (endpoint is not null)
-        {
-            clientOptions.Endpoint = endpoint;
-        }
-
-        return new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions).GetResponsesClient().AsIChatClient(options.ModelId);
-    }
-
-    private static IChatClient CreateCrsChatClient(ChatClientOptions options, ILoggerFactory loggerFactory, IHttpClientFactory httpClientFactory)
-    {
-        if (string.IsNullOrWhiteSpace(options.ApiKey))
-        {
-            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
-        }
-        var baseClient = CreateOpenAiChatClient(options, loggerFactory, httpClientFactory);
-        return new CrsChatClient(baseClient);
     }
 
     private static IChatClient CreateAnthropicChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
@@ -185,6 +151,27 @@ public static class ServiceCollectionExtensions
         return client.AsIChatClient(options.ModelId);
     }
 
+    private static IChatClient CreateOpenAiChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
+        }
+        var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
+        var clientOptions = new OpenAIClientOptions
+        {
+            NetworkTimeout = Timeout.InfiniteTimeSpan,
+            Transport = new HttpClientPipelineTransport(httpClient),
+        };
+        var endpoint = GetEndpoint(options.BaseUrl);
+        if (endpoint is not null)
+        {
+            clientOptions.Endpoint = endpoint;
+        }
+
+        return new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions).GetResponsesClient().AsIChatClient(options.ModelId);
+    }
+
     private static IChatClient CreateOllamaChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
     {
         if (string.IsNullOrWhiteSpace(options.ApiKey))
@@ -203,6 +190,16 @@ public static class ServiceCollectionExtensions
         var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
         httpClient.BaseAddress = endpoint;
         return new OllamaApiClient(httpClient, options.ModelId);
+    }
+
+    private static IChatClient CreateCrsChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
+        }
+        var baseClient = CreateOpenAiChatClient(options, httpClientFactory);
+        return new CrsChatClient(baseClient);
     }
 
     private static Uri? GetEndpoint(string? baseUrl)

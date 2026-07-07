@@ -12,7 +12,7 @@ builder.WebHost.UseStaticWebAssets();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.ConfigureHttpClientAgents(client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(4000);
+    client.Timeout = Timeout.InfiniteTimeSpan;
 });
 builder.Services.AddScoped<ChatWorkspaceService>();
 builder.Services.AddSingleton<IOutputCapture, WebOutputCapture>();

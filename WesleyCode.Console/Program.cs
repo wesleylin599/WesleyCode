@@ -15,7 +15,7 @@ builder.Logging.AddSimpleConsole(options =>
 });
 builder.Services.ConfigureHttpClientAgents(client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(4000);
+    client.Timeout = Timeout.InfiniteTimeSpan;
 });
 builder.Services.AddSingleton<IOutputCapture, ConsoleOutputCapture>();
 builder.Services.AddHostedService<ConsoleAgentHostedService>();

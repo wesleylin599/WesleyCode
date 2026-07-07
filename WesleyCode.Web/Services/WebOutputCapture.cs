@@ -38,6 +38,6 @@ public sealed class WebOutputCapture : IOutputCapture
     public void WriteToolResult(string callId, string? target, object? result)
     {
         var title = $"{target ?? "unknow"} - {callId} - result";
-        _state.AddCurrentMessage(ChatRole.Tool, title, result?.ToString() ?? string.Empty);
+        _state.AddCurrentMessage(ChatRole.Tool, title, JsonSerializer.Serialize(result, JsonOptions));
     }
 }

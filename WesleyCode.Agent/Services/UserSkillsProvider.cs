@@ -48,15 +48,11 @@ internal sealed class UserSkillsProvider : AIContextProvider
                         new AIFunctionFactoryOptions { Name = "user_skills_delete_file", Description = "删除用户 skills 目录中的文件。" }
                     ),
                     AIFunctionFactory.Create(
-                        ListFilesAsync,
-                        new AIFunctionFactoryOptions { Name = "user_skills_list_files", Description = "列出用户 skills 目录下的直接子文件。" }
-                    ),
-                    AIFunctionFactory.Create(
-                        ListSubdirectoriesAsync,
+                        ListChildrenAsync,
                         new AIFunctionFactoryOptions
                         {
-                            Name = "user_skills_list_subdirectories",
-                            Description = "列出用户 skills 目录下的直接子目录。",
+                            Name = "user_skills_list_children",
+                            Description = "列出用户 skills 目录下的直接子文件和子目录。",
                         }
                     ),
                     AIFunctionFactory.Create(
@@ -81,7 +77,7 @@ internal sealed class UserSkillsProvider : AIContextProvider
             return $"文件已存在：{fileName}。如需覆盖请将 overwrite 设为 true。";
         }
 
-        await _store.WriteFileAsync(fileName, content, cancellationToken);
+        await _store.WriteAsync(fileName, content, cancellationToken);
         return overwrite ? $"已写入 skills 文件：{fileName}（已覆盖）。" : $"已写入 skills 文件：{fileName}。";
     }
 
@@ -92,7 +88,7 @@ internal sealed class UserSkillsProvider : AIContextProvider
             return $"skills 目录不存在：{_skillsRoot}";
         }
 
-        var content = await _store.ReadFileAsync(fileName, cancellationToken);
+        var content = await _store.ReadAsync(fileName, cancellationToken);
         return content ?? $"文件不存在：{fileName}";
     }
 
@@ -103,34 +99,21 @@ internal sealed class UserSkillsProvider : AIContextProvider
             return $"skills 目录不存在：{_skillsRoot}";
         }
 
-        var deleted = await _store.DeleteFileAsync(fileName, cancellationToken);
+        var deleted = await _store.DeleteAsync(fileName, cancellationToken);
         return deleted ? $"已删除 skills 文件：{fileName}" : $"文件不存在：{fileName}";
     }
 
-    private Task<IReadOnlyList<string>> ListFilesAsync(
+    private Task<IReadOnlyList<FileStoreEntry>> ListChildrenAsync(
         [Description("要列出的相对目录路径；留空表示 skills 根目录")] string? directory = null,
         CancellationToken cancellationToken = default
     )
     {
         if (!Directory.Exists(_skillsRoot))
         {
-            return Task.FromResult<IReadOnlyList<string>>([]);
+            return Task.FromResult<IReadOnlyList<FileStoreEntry>>([]);
         }
 
-        return _store.ListFilesAsync(directory ?? string.Empty, cancellationToken);
-    }
-
-    private Task<IReadOnlyList<string>> ListSubdirectoriesAsync(
-        [Description("要列出的相对目录路径；留空表示 skills 根目录")] string? directory = null,
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (!Directory.Exists(_skillsRoot))
-        {
-            return Task.FromResult<IReadOnlyList<string>>([]);
-        }
-
-        return _store.ListDirectoriesAsync(directory ?? string.Empty, cancellationToken);
+        return _store.ListChildrenAsync(directory ?? string.Empty, cancellationToken);
     }
 
     private Task<IReadOnlyList<FileSearchResult>> SearchFilesAsync(
@@ -144,6 +127,6 @@ internal sealed class UserSkillsProvider : AIContextProvider
             return Task.FromResult<IReadOnlyList<FileSearchResult>>([]);
         }
 
-        return _store.SearchFilesAsync(string.Empty, regexPattern, filePattern ?? string.Empty, false, cancellationToken);
+        return _store.SearchAsync(string.Empty, regexPattern, filePattern, false, cancellationToken);
     }
 }

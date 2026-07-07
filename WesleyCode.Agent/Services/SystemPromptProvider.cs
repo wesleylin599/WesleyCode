@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using Microsoft.Agents.AI;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using WesleyCode.Agent.Options;
 
 namespace WesleyCode.Agent.Services;
 
@@ -9,14 +9,13 @@ internal sealed class SystemPromptProvider : AIContextProvider
 {
     private const string SystemPromptName = "SYSTEM.md";
 
-    private readonly string _workDirectory;
-    private readonly ILogger<SystemPromptProvider> _logger;
-    private string? _agentPrompt;
+    private string _agentPrompt = string.Empty;
 
-    public SystemPromptProvider(string workDirectory, ILoggerFactory? loggerFactory = null)
+    private readonly IOptions<WorkingOptions> _options;
+
+    public SystemPromptProvider(IOptions<WorkingOptions> options)
     {
-        _workDirectory = workDirectory;
-        _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<SystemPromptProvider>();
+        _options = options;
     }
 
     protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
@@ -34,27 +33,19 @@ internal sealed class SystemPromptProvider : AIContextProvider
         var builder = new StringBuilder();
         builder.AppendLine("## System Prompt");
         builder.AppendLine($"当前操作系统是\"{Environment.OSVersion.VersionString}\"");
-        builder.AppendLine($"当前工作目录是\"{_workDirectory}\"");
+        builder.AppendLine($"当前工作目录是\"{_options.Value.BasePath}\"");
 
         var promptFiles = EnumeratePromptFiles().ToList();
         foreach (var path in promptFiles)
         {
-            _logger.LogDebug("加载提示词文件 `{PromptPath}`", path);
-            try
+            var prompt = await File.ReadAllTextAsync(path, cancellationToken);
+            if (string.IsNullOrWhiteSpace(prompt))
             {
-                var prompt = await File.ReadAllTextAsync(path, cancellationToken);
-                if (string.IsNullOrWhiteSpace(prompt))
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                builder.AppendLine($"以下附加指令来自 {path}:");
-                builder.AppendLine(prompt);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "读取提示词文件失败: {PromptPath}", path);
-            }
+            builder.AppendLine($"以下附加指令来自 {path}:");
+            builder.AppendLine(prompt);
         }
 
         return builder.ToString().Trim();
@@ -62,7 +53,7 @@ internal sealed class SystemPromptProvider : AIContextProvider
 
     private IEnumerable<string> EnumeratePromptFiles()
     {
-        var localSystemPath = Path.Combine(_workDirectory, SystemPromptName);
+        var localSystemPath = Path.Combine(_options.Value.BasePath, SystemPromptName);
         if (File.Exists(localSystemPath))
         {
             yield return localSystemPath;

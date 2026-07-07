@@ -46,12 +46,8 @@ internal sealed class WorkspaceFilePolicyProvider : AIContextProvider
                         new AIFunctionFactoryOptions { Name = "workspace_delete_file", Description = "删除工作区中的文件。" }
                     ),
                     AIFunctionFactory.Create(
-                        ListFilesAsync,
-                        new AIFunctionFactoryOptions { Name = "workspace_list_files", Description = "列出工作区目录下的直接子文件。" }
-                    ),
-                    AIFunctionFactory.Create(
-                        ListSubdirectoriesAsync,
-                        new AIFunctionFactoryOptions { Name = "workspace_list_subdirectories", Description = "列出工作区目录下的直接子目录。" }
+                        ListChildrenAsync,
+                        new AIFunctionFactoryOptions { Name = "workspace_list_children", Description = "列出工作区目录下的直接子文件和子目录。" }
                     ),
                     AIFunctionFactory.Create(
                         SearchFilesAsync,
@@ -69,41 +65,49 @@ internal sealed class WorkspaceFilePolicyProvider : AIContextProvider
         CancellationToken cancellationToken = default
     )
     {
+        Directory.CreateDirectory(_workspaceRoot);
         if (!overwrite && await _store.FileExistsAsync(fileName, cancellationToken))
         {
             return $"文件已存在：{fileName}。如需覆盖请将 overwrite 设为 true。";
         }
 
-        await _store.WriteFileAsync(fileName, content, cancellationToken);
+        await _store.WriteAsync(fileName, content, cancellationToken);
         return overwrite ? $"已写入文件：{fileName}（已覆盖）。" : $"已写入文件：{fileName}。";
     }
 
     private async Task<string> ReadFileAsync([Description("要读取的相对文件路径")] string fileName, CancellationToken cancellationToken = default)
     {
-        var content = await _store.ReadFileAsync(fileName, cancellationToken);
+        if (!Directory.Exists(_workspaceRoot))
+        {
+            return $"工作区目录不存在：{_workspaceRoot}";
+        }
+
+        var content = await _store.ReadAsync(fileName, cancellationToken);
         return content ?? $"文件不存在：{fileName}";
     }
 
     private async Task<string> DeleteFileAsync([Description("要删除的相对文件路径")] string fileName, CancellationToken cancellationToken = default)
     {
-        var deleted = await _store.DeleteFileAsync(fileName, cancellationToken);
+        if (!Directory.Exists(_workspaceRoot))
+        {
+            return $"工作区目录不存在：{_workspaceRoot}";
+        }
+
+        var deleted = await _store.DeleteAsync(fileName, cancellationToken);
         return deleted ? $"已删除文件：{fileName}" : $"文件不存在：{fileName}";
     }
 
-    private Task<IReadOnlyList<string>> ListFilesAsync(
+    private Task<IReadOnlyList<FileStoreEntry>> ListChildrenAsync(
         [Description("要列出的相对目录路径；留空表示工作区根目录")] string? directory = null,
         CancellationToken cancellationToken = default
     )
     {
-        return _store.ListFilesAsync(directory ?? string.Empty, cancellationToken);
-    }
+        if (!Directory.Exists(_workspaceRoot))
+        {
+            return Task.FromResult<IReadOnlyList<FileStoreEntry>>([]);
+        }
 
-    private Task<IReadOnlyList<string>> ListSubdirectoriesAsync(
-        [Description("要列出的相对目录路径；留空表示工作区根目录")] string? directory = null,
-        CancellationToken cancellationToken = default
-    )
-    {
-        return _store.ListDirectoriesAsync(directory ?? string.Empty, cancellationToken);
+        return _store.ListChildrenAsync(directory ?? string.Empty, cancellationToken);
     }
 
     private Task<IReadOnlyList<FileSearchResult>> SearchFilesAsync(
@@ -112,6 +116,11 @@ internal sealed class WorkspaceFilePolicyProvider : AIContextProvider
         CancellationToken cancellationToken = default
     )
     {
-        return _store.SearchFilesAsync(string.Empty, regexPattern, filePattern ?? string.Empty, false, cancellationToken);
+        if (!Directory.Exists(_workspaceRoot))
+        {
+            return Task.FromResult<IReadOnlyList<FileSearchResult>>([]);
+        }
+
+        return _store.SearchAsync(string.Empty, regexPattern, filePattern, false, cancellationToken);
     }
 }
