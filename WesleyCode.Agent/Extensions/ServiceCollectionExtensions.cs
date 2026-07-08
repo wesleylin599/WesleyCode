@@ -174,10 +174,6 @@ public static class ServiceCollectionExtensions
 
     private static IChatClient CreateOllamaChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
     {
-        if (string.IsNullOrWhiteSpace(options.ApiKey))
-        {
-            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
-        }
         if (string.IsNullOrWhiteSpace(options.ModelId))
         {
             throw new InvalidOperationException("未配置 Model Id，请设置 WESLEY_MODELID。");
@@ -188,6 +184,7 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException("未配置 BaseUrl，请设置 WESLEY_BASEURL。");
         }
         var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
+        httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {options.ApiKey}");
         httpClient.BaseAddress = endpoint;
         return new OllamaApiClient(httpClient, options.ModelId);
     }
