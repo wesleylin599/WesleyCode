@@ -7,6 +7,7 @@ WesleyCode 是一个基于 .NET 10 的智能体宿主项目，提供控制台和
 - 支持控制台模式与 Web 对话模式
 - 支持 `openai`、`anthropic`、`crs`、`ollama` 四类模型提供方
 - 内置命令执行能力，可在工作目录中调用 PowerShell 或 Bash
+- 内置 HTTP/HTTPS 网络请求工具，可直接请求接口
 - 内置工作区文件读写、搜索、列目录等工具
 - 支持技能目录加载，扩展智能体能力
 - 支持会话持久化，保留历史上下文
@@ -42,6 +43,7 @@ WesleyCode 是一个基于 .NET 10 的智能体宿主项目，提供控制台和
 - `WesleyCode.Agent/Extensions/ServiceCollectionExtensions.cs`
 - `WesleyCode.Agent/Infrastructure/AgentRunner.cs`
 - `WesleyCode.Agent/Services/CommandProvider.cs`
+- `WesleyCode.Agent/Services/NetworkRequestProvider.cs`
 - `WesleyCode.Agent/Services/WorkspaceFilePolicyProvider.cs`
 
 #### `WesleyCode.Console`
@@ -189,6 +191,14 @@ Web 版工作区默认位于应用目录下的 `workspace` 目录，并提供：
 - 非 Windows 下默认使用 `bin/bash`
 
 命令执行目录来自 `WorkingOptions.BasePath`。
+
+### 网络请求
+
+智能体可通过 `http_request` 调用 HTTP/HTTPS 接口：
+
+- 支持 `GET`、`POST`、`PUT`、`DELETE` 等常见方法
+- 支持自定义请求头、请求体和 `Content-Type`
+- 返回精简后的状态码、响应头和响应体，失败信息也放在响应体中
 
 ### 技能加载
 

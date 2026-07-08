@@ -56,7 +56,6 @@ public static class ServiceCollectionExtensions
             .Configure(config =>
             {
                 config.Name = "main";
-                config.Instructions = "调用工具高效完成用户需求,行动优先不要过多询问,完成后进行校验";
             });
 
         services
@@ -83,6 +82,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<AIContextProvider, AgentModeProvider>();
 
         services.AddTransient<AIContextProvider, SystemPromptProvider>();
+
+        services.AddTransient<AIContextProvider, NetworkRequestProvider>();
 
         services.AddTransient<AIContextProvider, WorkspaceFilePolicyProvider>();
 

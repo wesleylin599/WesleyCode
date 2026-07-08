@@ -9,8 +9,6 @@ internal sealed class SystemPromptProvider : AIContextProvider
 {
     private const string SystemPromptName = "SYSTEM.md";
 
-    private string _agentPrompt = string.Empty;
-
     private readonly IOptions<WorkingOptions> _options;
 
     public SystemPromptProvider(IOptions<WorkingOptions> options)
@@ -18,15 +16,8 @@ internal sealed class SystemPromptProvider : AIContextProvider
         _options = options;
     }
 
-    protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(_agentPrompt))
-        {
-            _agentPrompt ??= await BuildPromptAsync(cancellationToken);
-        }
-
-        return new AIContext { Instructions = _agentPrompt };
-    }
+    protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default) =>
+        new AIContext { Instructions = await BuildPromptAsync(cancellationToken) };
 
     private async Task<string> BuildPromptAsync(CancellationToken cancellationToken = default)
     {
@@ -44,7 +35,6 @@ internal sealed class SystemPromptProvider : AIContextProvider
                 continue;
             }
 
-            builder.AppendLine($"以下附加指令来自 {path}:");
             builder.AppendLine(prompt);
         }
 
