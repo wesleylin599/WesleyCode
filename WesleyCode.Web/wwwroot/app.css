@@ -68,11 +68,13 @@ textarea {
 }
 
 .sidebar-main {
-    display: flex;
+    display: grid;
     flex: 1;
-    flex-direction: column;
     gap: 22px;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr);
+    height: 100%;
     min-height: 0;
+    overflow: hidden;
     padding: 28px 22px;
 }
 
@@ -196,11 +198,19 @@ textarea {
 }
 
 .sidebar-files {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 220px;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
     overflow: hidden;
+}
+
+.sidebar-tree-scroll {
+    min-height: 0;
+    margin-top: 14px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 6px;
 }
 
 .sidebar-files-header {
@@ -208,6 +218,7 @@ textarea {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    min-height: fit-content;
 }
 
 .sidebar-files-tools {
@@ -249,64 +260,90 @@ textarea {
 
 .sidebar-tree {
     display: flex;
-    flex: 1;
     flex-direction: column;
-    gap: 10px;
-    margin-top: 14px;
-    overflow: auto;
-    padding-right: 6px;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.workspace-tree-item {
+    min-width: 0;
 }
 
 .workspace-tree-group,
 .workspace-tree-file {
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
 }
 
 .workspace-tree-group {
-    overflow: hidden;
+    overflow: visible;
 }
 
 .workspace-tree-summary {
     list-style: none;
     cursor: pointer;
-    padding: 10px 12px;
+    padding: 6px 8px;
+    border-radius: 10px;
 }
 
     .workspace-tree-summary::-webkit-details-marker {
         display: none;
     }
 
+    .workspace-tree-summary:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
 .workspace-tree-file {
-    padding: 10px 12px;
+    padding: 6px 8px;
+    border-radius: 10px;
 }
+
+    .workspace-tree-file:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .workspace-tree-group[open] > .workspace-tree-summary {
+        background: rgba(255, 255, 255, 0.04);
+    }
 
 .workspace-tree-label {
     display: flex;
     align-items: center;
+    gap: 8px;
     min-width: 0;
+}
+
+.workspace-tree-icon {
+    flex: 0 0 1.1rem;
+    width: 1.1rem;
+    text-align: center;
+    font-size: 0.95rem;
+    line-height: 1;
 }
 
 .workspace-tree-name {
     font-size: 0.94rem;
     line-height: 1.4;
-    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-    .workspace-tree-name.directory::before {
-        content: "[DIR] ";
-    }
-
-.workspace-tree-file .workspace-tree-name::before {
-    content: "[FILE] ";
+.workspace-tree-name.directory {
+    font-weight: 600;
 }
 
 .workspace-tree-children {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 0 12px 12px 18px;
+    gap: 4px;
+    margin: 0;
+    padding: 2px 0 0 18px;
+    list-style: none;
 }
 
 .workspace {

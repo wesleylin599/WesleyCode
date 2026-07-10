@@ -101,6 +101,11 @@ public sealed class ChatWorkspaceService : IDisposable
             return;
         }
 
+        if (_session is null)
+        {
+            return;
+        }
+
         await _gate.WaitAsync(cancellationToken);
         try
         {
@@ -110,10 +115,10 @@ public sealed class ChatWorkspaceService : IDisposable
             _outputState.AddUserMessage(_channelId, input);
             using (_outputState.BeginChannel(_channelId))
             {
-                await GetAgentRunner().ExecuteAsync(input, _session!, cancellationToken);
+                await GetAgentRunner().ExecuteAsync(input, _session, cancellationToken);
             }
 
-            await GetSessionStore().SaveAsync(_session!, cancellationToken);
+            await GetSessionStore().SaveAsync(_session, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -266,24 +271,30 @@ public sealed class ChatWorkspaceService : IDisposable
         return BuildWorkspaceEntries(fullPath, fullPath);
     }
 
-    private static IReadOnlyList<WorkspaceEntryNode> BuildWorkspaceEntries(string rootPath, string currentPath)
+    private IReadOnlyList<WorkspaceEntryNode> BuildWorkspaceEntries(string rootPath, string currentPath)
     {
         List<WorkspaceEntryNode> entries = [];
-
-        foreach (var directoryPath in Directory.GetDirectories(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        try
         {
-            var directoryName = Path.GetFileName(directoryPath);
-            var relativePath = Path.GetRelativePath(rootPath, directoryPath).Replace('\\', '/');
-            entries.Add(new WorkspaceEntryNode(directoryName, relativePath, true, BuildWorkspaceEntries(rootPath, directoryPath)));
-        }
+            foreach (var directoryPath in Directory.GetDirectories(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            {
+                var directoryName = Path.GetFileName(directoryPath);
+                var relativePath = Path.GetRelativePath(rootPath, directoryPath).Replace('\\', '/');
+                entries.Add(new WorkspaceEntryNode(directoryName, relativePath, true, BuildWorkspaceEntries(rootPath, directoryPath)));
+            }
 
-        foreach (var filePath in Directory.GetFiles(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            foreach (var filePath in Directory.GetFiles(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            {
+                var fileName = Path.GetFileName(filePath);
+                var relativePath = Path.GetRelativePath(rootPath, filePath).Replace('\\', '/');
+                entries.Add(new WorkspaceEntryNode(fileName, relativePath, false, []));
+            }
+        }
+        catch (Exception ex)
         {
-            var fileName = Path.GetFileName(filePath);
-            var relativePath = Path.GetRelativePath(rootPath, filePath).Replace('\\', '/');
-            entries.Add(new WorkspaceEntryNode(fileName, relativePath, false, []));
+            _logger.LogWarning(ex, "执行智能体请求失败。");
+            _outputState.AddSystemMessage(_channelId, ex.Message);
         }
-
         return entries;
     }
 

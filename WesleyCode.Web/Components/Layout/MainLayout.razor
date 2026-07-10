@@ -43,11 +43,13 @@
                 }
                 else
                 {
-                    <div class="sidebar-tree" role="tree" aria-label="工作区文件树">
-                        @foreach (var entry in Workspace.WorkspaceEntries)
-                        {
-                            @RenderWorkspaceEntry(entry)
-                        }
+                    <div class="sidebar-tree-scroll">
+                        <ul class="sidebar-tree" role="tree" aria-label="工作区文件树">
+                            @foreach (var entry in Workspace.WorkspaceEntries)
+                            {
+                                @RenderWorkspaceEntry(entry)
+                            }
+                        </ul>
                     </div>
                 }
             </section>
@@ -143,42 +145,63 @@
     {
         if (entry.IsDirectory)
         {
-            builder.OpenElement(0, "details");
-            builder.AddAttribute(1, "class", "workspace-tree-group");
-            builder.AddAttribute(2, "open", true);
+            builder.OpenElement(0, "li");
+            builder.AddAttribute(1, "class", "workspace-tree-item");
+            builder.AddAttribute(2, "role", "treeitem");
+            builder.AddAttribute(3, "aria-expanded", "true");
 
-            builder.OpenElement(3, "summary");
-            builder.AddAttribute(4, "class", "workspace-tree-summary");
-            builder.OpenElement(5, "div");
-            builder.AddAttribute(6, "class", "workspace-tree-label");
+            builder.OpenElement(4, "details");
+            builder.AddAttribute(5, "class", "workspace-tree-group");
+            builder.AddAttribute(6, "open", true);
 
-            builder.OpenElement(7, "span");
-            builder.AddAttribute(8, "class", "workspace-tree-name directory");
-            builder.AddContent(9, entry.Name);
+            builder.OpenElement(7, "summary");
+            builder.AddAttribute(8, "class", "workspace-tree-summary");
+            builder.OpenElement(9, "div");
+            builder.AddAttribute(10, "class", "workspace-tree-label");
+
+            builder.OpenElement(11, "span");
+            builder.AddAttribute(12, "class", "workspace-tree-icon directory");
+            builder.AddAttribute(13, "aria-hidden", "true");
+            builder.AddContent(14, "📁");
+            builder.CloseElement();
+
+            builder.OpenElement(15, "span");
+            builder.AddAttribute(16, "class", "workspace-tree-name directory");
+            builder.AddContent(17, entry.Name);
+            builder.CloseElement();
+
             builder.CloseElement();
             builder.CloseElement();
-            builder.CloseElement();
 
-            builder.OpenElement(10, "div");
-            builder.AddAttribute(11, "class", "workspace-tree-children");
+            builder.OpenElement(18, "ul");
+            builder.AddAttribute(19, "class", "workspace-tree-children");
+            builder.AddAttribute(20, "role", "group");
             foreach (var child in entry.Children)
             {
-                builder.AddContent(12, RenderWorkspaceEntry(child));
+                builder.AddContent(21, RenderWorkspaceEntry(child));
             }
+            builder.CloseElement();
             builder.CloseElement();
             builder.CloseElement();
             return;
         }
 
-        builder.OpenElement(16, "div");
-        builder.AddAttribute(17, "class", "workspace-tree-file");
+        builder.OpenElement(18, "li");
+        builder.AddAttribute(19, "class", "workspace-tree-item workspace-tree-file");
+        builder.AddAttribute(20, "role", "treeitem");
 
-        builder.OpenElement(18, "div");
-        builder.AddAttribute(19, "class", "workspace-tree-label");
+        builder.OpenElement(21, "div");
+        builder.AddAttribute(22, "class", "workspace-tree-label");
 
-        builder.OpenElement(20, "span");
-        builder.AddAttribute(21, "class", "workspace-tree-name");
-        builder.AddContent(22, entry.Name);
+        builder.OpenElement(23, "span");
+        builder.AddAttribute(24, "class", "workspace-tree-icon file");
+        builder.AddAttribute(25, "aria-hidden", "true");
+        builder.AddContent(26, "📄");
+        builder.CloseElement();
+
+        builder.OpenElement(27, "span");
+        builder.AddAttribute(28, "class", "workspace-tree-name");
+        builder.AddContent(29, entry.Name);
         builder.CloseElement();
         builder.CloseElement();
         builder.CloseElement();
