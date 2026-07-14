@@ -125,7 +125,14 @@
                 @bind="_input"
                 @bind:event="oninput"
                 disabled="@Workspace.IsBusy"></textarea>
-            <button class="send-button" @onclick="SendAsync" disabled="@(Workspace.IsBusy || string.IsNullOrWhiteSpace(_input))">发送</button>
+            @if (Workspace.IsBusy)
+            {
+                <button class="stop-button" @onclick="StopGenerationAsync">中断</button>
+            }
+            else
+            {
+                <button class="send-button" @onclick="SendAsync" disabled="@(string.IsNullOrWhiteSpace(_input))">发送</button>
+            }
         </div>
     </div>
 </div>
@@ -199,6 +206,11 @@
 
     private async Task SendAsync()
     {
+        if (Workspace.IsBusy)
+        {
+            return;
+        }
+
         var input = _input.Trim();
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -208,6 +220,12 @@
         _input = string.Empty;
         await InvokeAsync(StateHasChanged);
         await Workspace.SendAsync(input);
+    }
+
+    private Task StopGenerationAsync()
+    {
+        Workspace.CancelGeneration();
+        return Task.CompletedTask;
     }
 
     private void OnWorkspaceChanged()

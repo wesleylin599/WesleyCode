@@ -17,6 +17,7 @@ public sealed class ChatWorkspaceService : IDisposable
     private readonly string _channelId = Guid.NewGuid().ToString("N");
     private readonly FileSystemWatcher? _workspaceWatcher;
     private AgentSession? _session;
+    private CancellationTokenSource? _generationCancellation;
     private bool _initialized;
 
     public ChatWorkspaceService(
@@ -41,6 +42,8 @@ public sealed class ChatWorkspaceService : IDisposable
     public IReadOnlyList<ChatMessage> Messages => _outputState.GetMessages(_channelId);
 
     public IReadOnlyList<WorkspaceEntryNode> WorkspaceEntries => GetWorkspaceEntries();
+
+    public void CancelGeneration() => _generationCancellation?.Cancel();
 
     public void RefreshWorkspaceEntries()
     {
@@ -107,18 +110,24 @@ public sealed class ChatWorkspaceService : IDisposable
         }
 
         await _gate.WaitAsync(cancellationToken);
+        using var generationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         try
         {
             IsBusy = true;
+            _generationCancellation = generationCancellation;
             NotifyChanged();
 
             _outputState.AddUserMessage(_channelId, input);
             using (_outputState.BeginChannel(_channelId))
             {
-                await GetAgentRunner().ExecuteAsync(input, _session, cancellationToken);
+                await GetAgentRunner().ExecuteAsync(input, _session, generationCancellation.Token);
             }
 
-            await GetSessionStore().SaveAsync(_session, cancellationToken);
+            await GetSessionStore().SaveAsync(_session, generationCancellation.Token);
+        }
+        catch (OperationCanceledException) when (generationCancellation.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            _outputState.AddSystemMessage(_channelId, "已中断当前生成。");
         }
         catch (Exception ex)
         {
@@ -274,6 +283,9 @@ public sealed class ChatWorkspaceService : IDisposable
     private IReadOnlyList<WorkspaceEntryNode> BuildWorkspaceEntries(string rootPath, string currentPath)
     {
         List<WorkspaceEntryNode> entries = [];
+
+        if (!Directory.Exists(rootPath) || !Directory.Exists(currentPath))
+            return entries;
         try
         {
             foreach (var directoryPath in Directory.GetDirectories(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))

@@ -1,21 +1,25 @@
-﻿using System.Diagnostics;
+﻿using System.ClientModel;
 using Microsoft.Extensions.AI;
+using OpenAI;
 
 namespace WesleyCode.Agent.Infrastructure;
 
-[DebuggerStepThrough]
-public sealed class CrsChatClient : DelegatingChatClient
+public sealed class ClaudeRelayServiceChatClient : IChatClient
 {
-    public CrsChatClient(IChatClient innerClient)
-        : base(innerClient) { }
+    private readonly IChatClient _responseClient;
 
-    public override Task<ChatResponse> GetResponseAsync(
+    public ClaudeRelayServiceChatClient(string modelId, ApiKeyCredential credential, OpenAIClientOptions options)
+    {
+        _responseClient = new OpenAIClient(credential, options).GetResponsesClient().AsIChatClient(modelId);
+    }
+
+    public Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default
     ) => this.GetStreamingResponseAsync(messages, options, cancellationToken).ToChatResponseAsync(cancellationToken);
 
-    public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+    public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default
@@ -58,6 +62,10 @@ public sealed class CrsChatClient : DelegatingChatClient
             request.Add(message);
         }
 
-        return base.GetStreamingResponseAsync(request, options, cancellationToken);
+        return _responseClient.GetStreamingResponseAsync(request, options, cancellationToken);
     }
+
+    public object? GetService(Type serviceType, object? serviceKey = null) => _responseClient.GetService(serviceType, serviceKey);
+
+    public void Dispose() => _responseClient.Dispose();
 }

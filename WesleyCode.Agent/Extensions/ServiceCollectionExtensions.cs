@@ -154,6 +154,10 @@ public static class ServiceCollectionExtensions
 
     private static IChatClient CreateOpenAiChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
     {
+        if (string.IsNullOrWhiteSpace(options.ModelId))
+        {
+            throw new InvalidOperationException("未配置 Model Id，请设置 WESLEY_MODELID。");
+        }
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
             throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
@@ -192,12 +196,27 @@ public static class ServiceCollectionExtensions
 
     private static IChatClient CreateCrsChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
     {
+        if (string.IsNullOrWhiteSpace(options.ModelId))
+        {
+            throw new InvalidOperationException("未配置 Model Id，请设置 WESLEY_MODELID。");
+        }
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
             throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
         }
-        var baseClient = CreateOpenAiChatClient(options, httpClientFactory);
-        return new CrsChatClient(baseClient);
+        var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
+        var clientOptions = new OpenAIClientOptions
+        {
+            NetworkTimeout = Timeout.InfiniteTimeSpan,
+            Transport = new HttpClientPipelineTransport(httpClient),
+        };
+        var endpoint = GetEndpoint(options.BaseUrl);
+        if (endpoint is not null)
+        {
+            clientOptions.Endpoint = endpoint;
+        }
+
+        return new ClaudeRelayServiceChatClient(options.ModelId, new ApiKeyCredential(options.ApiKey), clientOptions);
     }
 
     private static Uri? GetEndpoint(string? baseUrl)
