@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.IO.Enumeration;
 using System.Text;
 using System.Text.Json.Serialization;
 using CliWrap;
@@ -123,25 +124,27 @@ internal sealed class CommandProvider : AIContextProvider
             return false;
         }
     }
-}
 
-sealed class CommandItem
-{
-    [JsonPropertyName("command")]
-    public string Command { get; set; } = string.Empty;
+    sealed class CommandItem
+    {
+        [Description("命令行")]
+        [JsonPropertyName("command")]
+        public string Command { get; set; } = string.Empty;
 
-    [JsonPropertyName("timeout_seconds")]
-    public int TimeoutSeconds { get; set; }
-}
+        [Description("执行超时时间")]
+        [JsonPropertyName("timeout_seconds")]
+        public int TimeoutSeconds { get; set; }
+    }
 
-sealed class CommandResult
-{
-    [JsonPropertyName("exit_code")]
-    public int ExitCode { get; set; }
+    sealed class CommandResult
+    {
+        [JsonPropertyName("exit_code")]
+        public int ExitCode { get; set; }
 
-    [JsonPropertyName("output")]
-    public string Output { get; set; } = string.Empty;
+        [JsonPropertyName("output")]
+        public string Output { get; set; } = string.Empty;
 
-    [JsonPropertyName("error")]
-    public string Error { get; set; } = string.Empty;
+        [JsonPropertyName("error")]
+        public string Error { get; set; } = string.Empty;
+    }
 }

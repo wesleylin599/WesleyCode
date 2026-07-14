@@ -108,15 +108,19 @@ internal sealed class NetworkRequestProvider : AIContextProvider
 
 sealed class HttpRequestItem
 {
+    [Description("请求地址")]
     [JsonPropertyName("url")]
     public string Url { get; set; } = string.Empty;
 
+    [Description("请求方式")]
     [JsonPropertyName("method")]
     public string Method { get; set; } = string.Empty;
 
+    [Description("请求头")]
     [JsonPropertyName("headers")]
     public Dictionary<string, string>? Headers { get; set; }
 
+    [Description("请求正文")]
     [JsonPropertyName("body")]
     public string? Body { get; set; }
 }
