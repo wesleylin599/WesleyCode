@@ -107,17 +107,28 @@ public static class ServiceCollectionExtensions
     {
         services.AddChatClient(provider =>
         {
-            return CreateChatClient(
-                    provider.GetRequiredService<IOptions<ChatClientOptions>>().Value,
-                    provider.GetRequiredService<IHttpClientFactory>()
-                )
+            var options = provider.GetRequiredService<IOptions<ChatClientOptions>>();
+            var httpFactory = provider.GetRequiredService<IHttpClientFactory>();
+            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+            return CreateChatClient(options.Value, httpFactory)
                 .AsBuilder()
+                .UseLogging(loggerFactory)
                 .UseFunctionInvocation()
-                .UseLogging(provider.GetRequiredService<ILoggerFactory>())
+                .UseContinueError()
                 .Build();
         });
 
         return services;
+    }
+
+    private static ChatClientBuilder UseContinueError(this ChatClientBuilder builder)
+    {
+        return builder.Use(
+            (innerClient, services) =>
+            {
+                return new ContinueErrorChatClient(innerClient);
+            }
+        );
     }
 
     private static IChatClient CreateChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)

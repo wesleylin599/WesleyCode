@@ -54,12 +54,14 @@ public sealed class ClaudeRelayServiceChatClient : IChatClient
         }
         foreach (var message in messages)
         {
-            if (message.Role == ChatRole.System && !string.IsNullOrWhiteSpace(message.Text))
+            if (message.Role == ChatRole.System)
             {
                 request.Add(new ChatMessage(ChatRole.User, message.Text));
-                continue;
             }
-            request.Add(message);
+            else
+            {
+                request.Add(message);
+            }
         }
 
         return _responseClient.GetStreamingResponseAsync(request, options, cancellationToken);

@@ -7,7 +7,7 @@ namespace WesleyCode.Agent.Services;
 
 internal static class CliWrapSkillScriptRunner
 {
-    private static readonly UTF8Encoding Utf8StrictEncoding = new(false, true);
+    private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
 
     public static async Task<object?> RunAsync(
         AgentFileSkill skill,
@@ -17,64 +17,35 @@ internal static class CliWrapSkillScriptRunner
         CancellationToken cancellationToken
     )
     {
-        var scriptPath = script.FullPath;
-        var scriptArguments = ParseArguments(arguments);
-        var (commandPath, commandArguments) = BuildCommand(scriptPath, scriptArguments);
-        var scriptDirectory = Path.GetDirectoryName(scriptPath) ?? AppContext.BaseDirectory;
+        var standardOutput = new StringBuilder();
+        var standardError = new StringBuilder();
+        var (commandPath, commandArguments) = BuildCommand(script.FullPath, ParseArguments(arguments));
 
-        using var standardOutputStream = new MemoryStream();
-        using var standardErrorStream = new MemoryStream();
-
-        var command = Cli.Wrap(commandPath)
-            .WithArguments(commandArguments)
-            .WithWorkingDirectory(scriptDirectory)
-            .WithStandardOutputPipe(PipeTarget.ToStream(standardOutputStream))
-            .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream))
-            .WithValidation(CommandResultValidation.None);
-
-        var execute = await command.ExecuteAsync(cancellationToken);
-        var standardOutput = DecodeCommandOutput(standardOutputStream.ToArray());
-        var standardError = DecodeCommandOutput(standardErrorStream.ToArray());
-
-        return new
+        try
         {
-            code = execute.ExitCode,
-            output = standardOutput,
-            error = standardError,
-        };
-    }
+            var command = Cli.Wrap(commandPath)
+                .WithArguments(commandArguments)
+                .WithWorkingDirectory(skill.Path)
+                .WithStandardOutputPipe(PipeTarget.ToStringBuilder(standardOutput))
+                .WithStandardErrorPipe(PipeTarget.ToStringBuilder(standardError))
+                .WithValidation(CommandResultValidation.None);
 
-    private static string DecodeCommandOutput(byte[] buffer)
-    {
-        if (buffer.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        foreach (var encoding in GetCommandOutputEncodings())
-        {
-            if (TryDecode(buffer, encoding, out var text))
+            var execute = await command.ExecuteAsync(cancellationToken);
+            return new
             {
-                return text;
-            }
+                code = execute.ExitCode,
+                output = standardOutput.ToString(),
+                error = standardError.ToString(),
+            };
         }
-
-        return Encoding.Default.GetString(buffer);
-    }
-
-    private static IEnumerable<Encoding> GetCommandOutputEncodings()
-    {
-        var codePages = new HashSet<int>();
-
-        yield return Utf8StrictEncoding;
-        codePages.Add(Encoding.UTF8.CodePage);
-
-        foreach (var encoding in new[] { Console.OutputEncoding, Encoding.Default, Encoding.GetEncoding("GB18030") })
+        catch (Exception ex)
         {
-            if (codePages.Add(encoding.CodePage))
+            return new
             {
-                yield return Encoding.GetEncoding(encoding.CodePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
-            }
+                code = -1,
+                output = standardOutput.ToString(),
+                error = $"脚本执行失败：{ex.Message}",
+            };
         }
     }
 
@@ -105,36 +76,9 @@ internal static class CliWrapSkillScriptRunner
         return values;
     }
 
-    private static bool TryDecode(byte[] buffer, Encoding encoding, out string text)
-    {
-        try
-        {
-            text = encoding.GetString(buffer);
-            return true;
-        }
-        catch (DecoderFallbackException)
-        {
-            text = string.Empty;
-            return false;
-        }
-    }
-
     private static (string CommandPath, IReadOnlyList<string> Arguments) BuildCommand(string scriptPath, IReadOnlyList<string> arguments)
     {
         var extension = Path.GetExtension(scriptPath);
-        if (string.Equals(extension, ".ps1", StringComparison.OrdinalIgnoreCase))
-        {
-            return ("powershell", ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, .. arguments]);
-        }
-
-        if (
-            string.Equals(extension, ".cmd", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(extension, ".bat", StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            return ("cmd", ["/c", scriptPath, .. arguments]);
-        }
-
         if (string.Equals(extension, ".py", StringComparison.OrdinalIgnoreCase))
         {
             return ("python", [scriptPath, .. arguments]);
@@ -149,11 +93,14 @@ internal static class CliWrapSkillScriptRunner
             return ("node", [scriptPath, .. arguments]);
         }
 
-        if (string.Equals(extension, ".sh", StringComparison.OrdinalIgnoreCase))
+        if (
+            string.Equals(extension, ".cs", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, ".csx", StringComparison.OrdinalIgnoreCase)
+        )
         {
-            return ("bash", [scriptPath, .. arguments]);
+            return ("dotnet", ["run", scriptPath, .. arguments]);
         }
 
-        return (scriptPath, arguments);
+        return (FileName, [scriptPath, .. arguments]);
     }
 }

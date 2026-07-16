@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using System.IO.Enumeration;
 using System.Text;
 using System.Text.Json.Serialization;
 using CliWrap;
@@ -12,7 +11,6 @@ namespace WesleyCode.Agent.Services;
 
 internal sealed class CommandProvider : AIContextProvider
 {
-    private static readonly UTF8Encoding Utf8StrictEncoding = new(false, true);
     private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
 
     static CommandProvider()
@@ -37,6 +35,8 @@ internal sealed class CommandProvider : AIContextProvider
                 当前使用的命令行工具是`{FileName}`
                 命令行工具的工作目录在`{_options.Value.BasePath}`
                 使用`run_command`来调用命令行工具执行命令
+                确保命令输出的字符编码为UTF8
+                禁止用于文件写入操作
                 """,
                 Tools = [AIFunctionFactory.Create(Command, new AIFunctionFactoryOptions { Name = "command_run", Description = "执行命令行" })],
             }
@@ -48,26 +48,27 @@ internal sealed class CommandProvider : AIContextProvider
         CommandResult output = new CommandResult();
         try
         {
+            if (string.IsNullOrEmpty(item.Command))
+                throw new ArgumentNullException(nameof(item.Command));
+
             var timeoutSeconds = item.TimeoutSeconds <= 0 ? 300 : Math.Min(item.TimeoutSeconds, 3600);
-            using var standardOutputStream = new MemoryStream();
-            using var standardErrorStream = new MemoryStream();
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
+            var standardOutput = new StringBuilder();
+            var standardError = new StringBuilder();
+
             var cli = Cli.Wrap(FileName)
-                .WithArguments(item.Command ?? string.Empty)
+                .WithArguments(item.Command)
                 .WithWorkingDirectory(_options.Value.BasePath)
-                .WithStandardOutputPipe(PipeTarget.ToStream(standardOutputStream))
-                .WithStandardErrorPipe(PipeTarget.ToStream(standardErrorStream))
+                .WithStandardOutputPipe(PipeTarget.ToStringBuilder(standardOutput, Encoding.UTF8))
+                .WithStandardErrorPipe(PipeTarget.ToStringBuilder(standardError, Encoding.UTF8))
                 .WithValidation(CommandResultValidation.None);
 
             var execute = await cli.ExecuteAsync(timeoutSource.Token);
-            var standardOutput = DecodeCommandOutput(standardOutputStream.ToArray());
-            var standardError = DecodeCommandOutput(standardErrorStream.ToArray());
-
             output.ExitCode = execute.ExitCode;
-            output.Output = standardOutput;
-            output.Error = standardError;
+            output.Output = standardOutput.ToString();
+            output.Error = standardError.ToString();
         }
         catch (Exception ex)
         {
@@ -75,54 +76,6 @@ internal sealed class CommandProvider : AIContextProvider
         }
 
         return output;
-    }
-
-    private static string DecodeCommandOutput(byte[] buffer)
-    {
-        if (buffer.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        foreach (var encoding in GetCommandOutputEncodings())
-        {
-            if (TryDecode(buffer, encoding, out var text))
-            {
-                return text;
-            }
-        }
-
-        return Encoding.Default.GetString(buffer);
-    }
-
-    private static IEnumerable<Encoding> GetCommandOutputEncodings()
-    {
-        var codePages = new HashSet<int>();
-
-        yield return Utf8StrictEncoding;
-        codePages.Add(Encoding.UTF8.CodePage);
-
-        foreach (var encoding in new[] { Console.OutputEncoding, Encoding.Default, Encoding.GetEncoding("GB18030") })
-        {
-            if (codePages.Add(encoding.CodePage))
-            {
-                yield return Encoding.GetEncoding(encoding.CodePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
-            }
-        }
-    }
-
-    private static bool TryDecode(byte[] buffer, Encoding encoding, out string text)
-    {
-        try
-        {
-            text = encoding.GetString(buffer);
-            return true;
-        }
-        catch (DecoderFallbackException)
-        {
-            text = string.Empty;
-            return false;
-        }
     }
 
     sealed class CommandItem

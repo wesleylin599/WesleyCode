@@ -39,48 +39,45 @@ internal class AgentRunner : IAgentRunner
     public async Task ExecuteAsync(string input, AgentSession session, CancellationToken cancellationToken = default)
     {
         List<ChatMessage> inputMessages = [new ChatMessage(ChatRole.User, input)];
-        do
+        while (inputMessages.Count > 0)
         {
-            bool isText = false;
             StringBuilder builder = new StringBuilder();
-            List<ToolApprovalRequestContent> toolApprovals = new List<ToolApprovalRequestContent>();
-            await foreach (var responseUpdate in _agent.RunStreamingAsync(inputMessages, session, cancellationToken: cancellationToken))
+            List<ChatMessage> toolApprovals = new List<ChatMessage>();
+            try
             {
-                foreach (var content in responseUpdate.Contents)
+                await foreach (var responseUpdate in _agent.RunStreamingAsync(inputMessages, session, cancellationToken: cancellationToken))
                 {
-                    if (content is TextContent textContent)
+                    foreach (var content in responseUpdate.Contents)
                     {
-                        builder.Append(textContent.Text);
-                        isText = true;
+                        if (content is TextContent textContent)
+                        {
+                            builder.Append(textContent.Text);
+                        }
+                        else if (builder.Length > 0)
+                        {
+                            _capture.WriteAgentMessage(builder.ToString());
+                            builder.Clear();
+                        }
+
+                        if (content is ToolApprovalRequestContent approvalRequestContent)
+                        {
+                            toolApprovals.Add(new ChatMessage(ChatRole.User, [approvalRequestContent.CreateResponse(true)]));
+                        }
+
+                        CommonWriteMessage(responseUpdate.AuthorName, content);
                     }
-                    if (builder.Length > 0 && !isText)
-                    {
-                        _capture.WriteAgentMessage(builder.ToString());
-                        builder.Clear();
-                    }
-                    if (content is FunctionCallContent callContent)
-                    {
-                        _capture.WriteToolCall(callContent.CallId, responseUpdate.AuthorName, callContent.Name, callContent.Arguments);
-                    }
-                    if (content is FunctionResultContent resultContent)
-                    {
-                        var result = resultContent.Exception?.Message ?? resultContent.Result;
-                        _capture.WriteToolResult(resultContent.CallId, responseUpdate.AuthorName, result);
-                    }
-                    if (content is ToolApprovalRequestContent approvalRequestContent)
-                    {
-                        toolApprovals.Add(approvalRequestContent);
-                    }
-                    isText = false;
                 }
             }
-            if (builder.Length > 0 && !isText)
+            finally
             {
-                _capture.WriteAgentMessage(builder.ToString());
-                builder.Clear();
+                if (builder.Length > 0)
+                {
+                    _capture.WriteAgentMessage(builder.ToString());
+                    builder.Clear();
+                }
             }
-            inputMessages = toolApprovals.Select(x => new ChatMessage(ChatRole.User, [x.CreateResponse(true)])).ToList();
-        } while (inputMessages.Count > 0);
+            inputMessages = toolApprovals;
+        }
     }
 
     public void RestartSession(AgentSession activeSession)
@@ -101,22 +98,32 @@ internal class AgentRunner : IAgentRunner
                 {
                     foreach (var content in message.Contents)
                     {
-                        if (content is FunctionCallContent callContent)
-                        {
-                            _capture.WriteToolCall(callContent.CallId, message.AuthorName, callContent.Name, callContent.Arguments);
-                        }
-                        if (content is FunctionResultContent resultContent)
-                        {
-                            var result = resultContent.Exception?.Message ?? resultContent.Result;
-                            _capture.WriteToolResult(resultContent.CallId, message.AuthorName, result);
-                        }
                         if (content is TextContent textContent && !string.IsNullOrEmpty(textContent.Text))
                         {
                             _capture.WriteAgentMessage(textContent.Text);
                         }
+
+                        CommonWriteMessage(message.AuthorName, content);
                     }
                 }
             }
+        }
+    }
+
+    private void CommonWriteMessage(string? author, AIContent content)
+    {
+        if (content is ErrorContent errorContent)
+        {
+            _capture.WriteSystemMessage(errorContent.Message);
+        }
+        else if (content is FunctionCallContent callContent)
+        {
+            _capture.WriteToolCall(callContent.CallId, author, callContent.Name, callContent.Arguments);
+        }
+        else if (content is FunctionResultContent resultContent)
+        {
+            var result = resultContent.Exception?.Message ?? resultContent.Result;
+            _capture.WriteToolResult(resultContent.CallId, author, result);
         }
     }
 }
