@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using System.Text;
 using System.Text.Json.Serialization;
 using CliWrap;
 using Microsoft.Agents.AI;
@@ -11,13 +10,6 @@ namespace WesleyCode.Agent.Services;
 
 internal sealed class CommandProvider : AIContextProvider
 {
-    private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
-
-    static CommandProvider()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-    }
-
     private readonly IOptions<WorkingOptions> _options;
 
     public CommandProvider(IOptions<WorkingOptions> options)
@@ -32,10 +24,9 @@ internal sealed class CommandProvider : AIContextProvider
             {
                 Instructions = $"""
                 ## Command
-                当前使用的命令行工具是`{FileName}`
+                当前使用的命令行工具是`{CliWrapRunner.FileName}`
                 命令行工具的工作目录在`{_options.Value.BasePath}`
                 使用`run_command`来调用命令行工具执行命令
-                确保命令输出的字符编码为UTF8
                 禁止用于文件写入操作
                 """,
                 Tools = [AIFunctionFactory.Create(Command, new AIFunctionFactoryOptions { Name = "command_run", Description = "执行命令行" })],
@@ -55,20 +46,20 @@ internal sealed class CommandProvider : AIContextProvider
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
-            var standardOutput = new StringBuilder();
-            var standardError = new StringBuilder();
+            using var standardOutput = new MemoryStream();
+            using var standardError = new MemoryStream();
 
-            var cli = Cli.Wrap(FileName)
+            var cli = Cli.Wrap(CliWrapRunner.FileName)
                 .WithArguments(item.Command)
                 .WithWorkingDirectory(_options.Value.BasePath)
-                .WithStandardOutputPipe(PipeTarget.ToStringBuilder(standardOutput, Encoding.UTF8))
-                .WithStandardErrorPipe(PipeTarget.ToStringBuilder(standardError, Encoding.UTF8))
+                .WithStandardOutputPipe(PipeTarget.ToStream(standardOutput))
+                .WithStandardErrorPipe(PipeTarget.ToStream(standardError))
                 .WithValidation(CommandResultValidation.None);
 
             var execute = await cli.ExecuteAsync(timeoutSource.Token);
             output.ExitCode = execute.ExitCode;
-            output.Output = standardOutput.ToString();
-            output.Error = standardError.ToString();
+            output.Output = CliWrapRunner.DecodeOutput(standardOutput);
+            output.Error = CliWrapRunner.DecodeOutput(standardError);
         }
         catch (Exception ex)
         {

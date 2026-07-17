@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Text;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
@@ -122,7 +123,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private async Task RunLoopAsync(CancellationToken stoppingToken)
     {
         var session = await _sessionStore.LoadAsync(stoppingToken);
-        _agentRunner.RestartSession(session);
+        await _agentRunner.RestartSessionAsync(session, stoppingToken);
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -161,7 +162,22 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 var stopwatch = Stopwatch.StartNew();
                 try
                 {
-                    await _agentRunner.ExecuteAsync(input, session, source.Token);
+                    List<ChatMessage> messages = [new ChatMessage(ChatRole.User, input)];
+                    while (messages.Count > 0)
+                    {
+                        var agentResponse = await _agentRunner.ExecuteAsync(messages, session, source.Token);
+                        messages = agentResponse
+                            .Messages.SelectMany(m => m.Contents)
+                            .OfType<ToolApprovalRequestContent>()
+                            .Select(request =>
+                            {
+                                var toolCall = (FunctionCallContent)request.ToolCall;
+                                System.Console.WriteLine($"Approve {toolCall.Name}? (Y/N)");
+                                bool approved = System.Console.ReadLine()?.Equals("Y", StringComparison.OrdinalIgnoreCase) ?? false;
+                                return new ChatMessage(ChatRole.User, [request.CreateResponse(approved)]);
+                            })
+                            .ToList();
+                    }
                     MarkSessionDirty();
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)

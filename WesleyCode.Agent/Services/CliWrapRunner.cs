@@ -2,12 +2,13 @@
 using System.Text.Json;
 using CliWrap;
 using Microsoft.Agents.AI;
+using UtfUnknown;
 
 namespace WesleyCode.Agent.Services;
 
-internal static class CliWrapSkillScriptRunner
+internal static class CliWrapRunner
 {
-    private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
+    public static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
 
     public static async Task<object?> RunAsync(
         AgentFileSkill skill,
@@ -17,8 +18,8 @@ internal static class CliWrapSkillScriptRunner
         CancellationToken cancellationToken
     )
     {
-        var standardOutput = new StringBuilder();
-        var standardError = new StringBuilder();
+        using var standardOutput = new MemoryStream();
+        using var standardError = new MemoryStream();
         var (commandPath, commandArguments) = BuildCommand(script.FullPath, ParseArguments(arguments));
 
         try
@@ -26,16 +27,16 @@ internal static class CliWrapSkillScriptRunner
             var command = Cli.Wrap(commandPath)
                 .WithArguments(commandArguments)
                 .WithWorkingDirectory(skill.Path)
-                .WithStandardOutputPipe(PipeTarget.ToStringBuilder(standardOutput))
-                .WithStandardErrorPipe(PipeTarget.ToStringBuilder(standardError))
+                .WithStandardOutputPipe(PipeTarget.ToStream(standardOutput))
+                .WithStandardErrorPipe(PipeTarget.ToStream(standardError))
                 .WithValidation(CommandResultValidation.None);
 
             var execute = await command.ExecuteAsync(cancellationToken);
             return new
             {
                 code = execute.ExitCode,
-                output = standardOutput.ToString(),
-                error = standardError.ToString(),
+                output = DecodeOutput(standardOutput),
+                error = DecodeOutput(standardError),
             };
         }
         catch (Exception ex)
@@ -43,10 +44,26 @@ internal static class CliWrapSkillScriptRunner
             return new
             {
                 code = -1,
-                output = standardOutput.ToString(),
+                output = DecodeOutput(standardOutput),
                 error = $"脚本执行失败：{ex.Message}",
             };
         }
+    }
+
+    public static string DecodeOutput(MemoryStream stream)
+    {
+        var bytes = stream.ToArray();
+
+        if (bytes.Length == 0)
+            return string.Empty;
+
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+        var result = CharsetDetector.DetectFromBytes(bytes);
+
+        var encoding = Encoding.GetEncoding(result.Detected?.EncodingName ?? "UTF-8");
+
+        return encoding.GetString(bytes);
     }
 
     private static IReadOnlyList<string> ParseArguments(JsonElement? arguments)

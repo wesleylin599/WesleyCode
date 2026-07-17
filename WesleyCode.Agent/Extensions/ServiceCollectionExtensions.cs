@@ -93,8 +93,14 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<AIContextProvider>(provider =>
             new AgentSkillsProviderBuilder()
+                .UseOptions(options =>
+                {
+                    options.DisableLoadSkillApproval = true;
+                    options.DisableRunSkillScriptApproval = true;
+                    options.DisableReadSkillResourceApproval = true;
+                })
                 .UseLoggerFactory(provider.GetRequiredService<ILoggerFactory>())
-                .UseFileScriptRunner(CliWrapSkillScriptRunner.RunAsync)
+                .UseFileScriptRunner(CliWrapRunner.RunAsync)
                 .UseFileSkill(skills)
                 .DisableCaching()
                 .Build()

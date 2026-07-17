@@ -36,56 +36,50 @@ internal class AgentRunner : IAgentRunner
     public ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedState, CancellationToken cancellationToken = default) =>
         _agent.DeserializeSessionAsync(serializedState, cancellationToken: cancellationToken);
 
-    public async Task ExecuteAsync(string input, AgentSession session, CancellationToken cancellationToken = default)
+    public async Task<AgentResponse> ExecuteAsync(List<ChatMessage> input, AgentSession session, CancellationToken cancellationToken = default)
     {
-        List<ChatMessage> inputMessages = [new ChatMessage(ChatRole.User, input)];
-        while (inputMessages.Count > 0)
+        StringBuilder builder = new StringBuilder();
+        List<AgentResponseUpdate> agentResponses = new List<AgentResponseUpdate>();
+        try
         {
-            StringBuilder builder = new StringBuilder();
-            List<ChatMessage> toolApprovals = new List<ChatMessage>();
-            try
+            await foreach (var responseUpdate in _agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
             {
-                await foreach (var responseUpdate in _agent.RunStreamingAsync(inputMessages, session, cancellationToken: cancellationToken))
+                foreach (var content in responseUpdate.Contents)
                 {
-                    foreach (var content in responseUpdate.Contents)
+                    if (content is TextContent textContent)
                     {
-                        if (content is TextContent textContent)
-                        {
-                            builder.Append(textContent.Text);
-                        }
-                        else if (builder.Length > 0)
-                        {
-                            _capture.WriteAgentMessage(builder.ToString());
-                            builder.Clear();
-                        }
-
-                        if (content is ToolApprovalRequestContent approvalRequestContent)
-                        {
-                            toolApprovals.Add(new ChatMessage(ChatRole.User, [approvalRequestContent.CreateResponse(true)]));
-                        }
-
-                        CommonWriteMessage(responseUpdate.AuthorName, content);
+                        builder.Append(textContent.Text);
                     }
+                    else if (builder.Length > 0)
+                    {
+                        _capture.WriteAgentMessage(builder.ToString());
+                        builder.Clear();
+                    }
+
+                    CommonWriteMessage(responseUpdate.AuthorName, content);
                 }
+                agentResponses.Add(responseUpdate);
             }
-            finally
-            {
-                if (builder.Length > 0)
-                {
-                    _capture.WriteAgentMessage(builder.ToString());
-                    builder.Clear();
-                }
-            }
-            inputMessages = toolApprovals;
         }
+        finally
+        {
+            if (builder.Length > 0)
+            {
+                _capture.WriteAgentMessage(builder.ToString());
+                builder.Clear();
+            }
+        }
+        return agentResponses.ToAgentResponse();
     }
 
-    public void RestartSession(AgentSession activeSession)
+    public Task RestartSessionAsync(AgentSession activeSession, CancellationToken cancellationToken = default)
     {
         if (activeSession.TryGetInMemoryChatHistory(out var history) && history != null)
         {
             foreach (var message in history)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (message.Role == ChatRole.User && !string.IsNullOrEmpty(message.Text))
                 {
                     _capture.WriteUserMessage(message.Text);
@@ -98,6 +92,8 @@ internal class AgentRunner : IAgentRunner
                 {
                     foreach (var content in message.Contents)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
+
                         if (content is TextContent textContent && !string.IsNullOrEmpty(textContent.Text))
                         {
                             _capture.WriteAgentMessage(textContent.Text);
@@ -108,6 +104,7 @@ internal class AgentRunner : IAgentRunner
                 }
             }
         }
+        return Task.CompletedTask;
     }
 
     private void CommonWriteMessage(string? author, AIContent content)

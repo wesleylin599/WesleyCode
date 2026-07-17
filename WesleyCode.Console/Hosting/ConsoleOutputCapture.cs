@@ -69,7 +69,7 @@ internal class ConsoleOutputCapture : IOutputCapture
         if (result == null)
             return "null";
 
-        var message = JsonSerializer.Serialize(result, _options);
+        var message = JsonSerializer.Serialize(result, _options).Replace("\\r\\n", "").Replace("\\n", "").Replace("  ", "");
         if (message.Length > MaxLogLength)
         {
             var contentLength = Math.Max(0, MaxLogLength - TruncatedSuffix.Length);
