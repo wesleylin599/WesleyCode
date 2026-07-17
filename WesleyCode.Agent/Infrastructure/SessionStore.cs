@@ -33,9 +33,11 @@ public sealed class SessionStore : ISessionStore
         if (!File.Exists(_sessionHistoryPath))
             return await _agentRunner.CreateSessionAsync(cancellationToken);
 
+        var lockAcquired = false;
         try
         {
             await _fileLock.WaitAsync(cancellationToken);
+            lockAcquired = true;
 
             var content = await File.ReadAllTextAsync(_sessionHistoryPath, Encoding.UTF8, cancellationToken);
             if (string.IsNullOrWhiteSpace(content))
@@ -59,7 +61,10 @@ public sealed class SessionStore : ISessionStore
         }
         finally
         {
-            _fileLock.Release();
+            if (lockAcquired)
+            {
+                _fileLock.Release();
+            }
         }
     }
 
@@ -74,9 +79,11 @@ public sealed class SessionStore : ISessionStore
             $"{Path.GetFileName(_sessionHistoryPath)}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp"
         );
 
+        var lockAcquired = false;
         try
         {
             await _fileLock.WaitAsync(cancellationToken);
+            lockAcquired = true;
 
             await File.WriteAllTextAsync(tempPath, element.GetRawText(), SessionEncoding, cancellationToken);
             if (File.Exists(_sessionHistoryPath))
@@ -90,7 +97,11 @@ public sealed class SessionStore : ISessionStore
         }
         finally
         {
-            _fileLock.Release();
+            if (lockAcquired)
+            {
+                _fileLock.Release();
+            }
+
             if (File.Exists(tempPath))
             {
                 File.Delete(tempPath);
@@ -122,10 +133,12 @@ public sealed class SessionStore : ISessionStore
             return;
         }
 
+        var lockAcquired = false;
         try
         {
             // 使用文件锁确保线程安全
             await _fileLock.WaitAsync(cancellationToken);
+            lockAcquired = true;
 
             var directory = Path.GetDirectoryName(_sessionHistoryPath) ?? AppContext.BaseDirectory;
             Directory.CreateDirectory(directory);
@@ -146,7 +159,10 @@ public sealed class SessionStore : ISessionStore
         }
         finally
         {
-            _fileLock.Release();
+            if (lockAcquired)
+            {
+                _fileLock.Release();
+            }
         }
     }
 }

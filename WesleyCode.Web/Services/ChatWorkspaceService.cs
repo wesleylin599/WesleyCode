@@ -9,28 +9,33 @@ namespace WesleyCode.Web.Services;
 
 public sealed class ChatWorkspaceService : IDisposable
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IAgentRunner _agentRunner;
+    private readonly ISessionStore _sessionStore;
     private readonly IWebOutputCaptureState _outputState;
     private readonly ILogger<ChatWorkspaceService> _logger;
-    private readonly string _workspacePath;
+    private readonly string? _workspacePath;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly string _channelId = Guid.NewGuid().ToString("N");
-    private readonly FileSystemWatcher? _workspaceWatcher;
+    private readonly FileSystemWatcher _workspaceWatcher;
     private AgentSession? _session;
     private CancellationTokenSource? _generationCancellation;
+    private IReadOnlyList<WorkspaceEntryNode>? _workspaceEntries;
     private bool _initialized;
 
     public ChatWorkspaceService(
-        IServiceProvider serviceProvider,
+        IAgentRunner agentRunner,
+        ISessionStore sessionStore,
         IWebOutputCaptureState outputState,
         IOptions<WorkingOptions> workingOptions,
         ILogger<ChatWorkspaceService> logger
     )
     {
-        _serviceProvider = serviceProvider;
+        _agentRunner = agentRunner;
+        _sessionStore = sessionStore;
         _outputState = outputState;
         _logger = logger;
-        _workspacePath = workingOptions.Value.BasePath;
+        var workspacePath = workingOptions.Value.BasePath;
+        _workspacePath = string.IsNullOrWhiteSpace(workspacePath) ? null : Path.GetFullPath(workspacePath);
         _outputState.ChannelChanged += OnChannelChanged;
         _workspaceWatcher = CreateWorkspaceWatcher();
     }
@@ -41,12 +46,30 @@ public sealed class ChatWorkspaceService : IDisposable
 
     public IReadOnlyList<ChatMessage> Messages => _outputState.GetMessages(_channelId);
 
-    public IReadOnlyList<WorkspaceEntryNode> WorkspaceEntries => GetWorkspaceEntries();
+    public IReadOnlyList<WorkspaceEntryNode> WorkspaceEntries
+    {
+        get
+        {
+            var entries = Volatile.Read(ref _workspaceEntries);
+            return entries ?? CacheWorkspaceEntries();
+        }
+    }
 
-    public void CancelGeneration() => _generationCancellation?.Cancel();
+    public void CancelGeneration()
+    {
+        try
+        {
+            Volatile.Read(ref _generationCancellation)?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // 生成任务恰好结束时，取消令牌可能已被释放。
+        }
+    }
 
     public void RefreshWorkspaceEntries()
     {
+        Interlocked.Exchange(ref _workspaceEntries, null);
         NotifyChanged();
     }
 
@@ -70,9 +93,8 @@ public sealed class ChatWorkspaceService : IDisposable
             {
                 using (_outputState.BeginChannel(_channelId))
                 {
-                    var sessionStore = GetSessionStore();
-                    _session = await sessionStore.LoadAsync(cancellationToken);
-                    await GetAgentRunner().RestartSessionAsync(_session, cancellationToken);
+                    _session = await _sessionStore.LoadAsync(cancellationToken);
+                    await _agentRunner.RestartSessionAsync(_session, cancellationToken);
                 }
 
                 _initialized = true;
@@ -114,16 +136,17 @@ public sealed class ChatWorkspaceService : IDisposable
         try
         {
             IsBusy = true;
-            _generationCancellation = generationCancellation;
+            Volatile.Write(ref _generationCancellation, generationCancellation);
+
             NotifyChanged();
 
             _outputState.AddUserMessage(_channelId, input);
             using (_outputState.BeginChannel(_channelId))
             {
-                await GetAgentRunner().ExecuteAsync([new ChatMessage(ChatRole.User, input)], _session, generationCancellation.Token);
+                await _agentRunner.ExecuteAsync([new ChatMessage(ChatRole.User, input)], _session, generationCancellation.Token);
             }
 
-            await GetSessionStore().SaveAsync(_session, generationCancellation.Token);
+            await _sessionStore.SaveAsync(_session, generationCancellation.Token);
         }
         catch (OperationCanceledException) when (generationCancellation.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -136,6 +159,8 @@ public sealed class ChatWorkspaceService : IDisposable
         }
         finally
         {
+            Interlocked.CompareExchange(ref _generationCancellation, null, generationCancellation);
+
             IsBusy = false;
             NotifyChanged();
             _gate.Release();
@@ -150,12 +175,13 @@ public sealed class ChatWorkspaceService : IDisposable
             IsBusy = true;
             NotifyChanged();
 
-            await GetSessionStore().ClearAsync(cancellationToken);
+            await _sessionStore.ClearAsync(cancellationToken);
             this.ClearWorkspaceContents();
+            RefreshWorkspaceEntries();
             _outputState.Reset(_channelId);
             try
             {
-                _session = await GetAgentRunner().CreateSessionAsync(cancellationToken);
+                _session = await _agentRunner.CreateSessionAsync(cancellationToken);
                 _initialized = true;
                 _outputState.AddSystemMessage(_channelId, "已创建新的空白会话，工作区已清空。");
             }
@@ -190,32 +216,27 @@ public sealed class ChatWorkspaceService : IDisposable
 
     private void ClearWorkspaceContents()
     {
-        if (string.IsNullOrWhiteSpace(_workspacePath))
+        if (_workspacePath is null)
         {
             return;
         }
 
-        var fullPath = Path.GetFullPath(_workspacePath);
-        if (!Directory.Exists(fullPath))
+        if (!Directory.Exists(_workspacePath))
         {
-            Directory.CreateDirectory(fullPath);
+            Directory.CreateDirectory(_workspacePath);
             return;
         }
 
-        foreach (var directory in Directory.GetDirectories(fullPath))
+        foreach (var directory in Directory.EnumerateDirectories(_workspacePath))
         {
             Directory.Delete(directory, recursive: true);
         }
 
-        foreach (var file in Directory.GetFiles(fullPath))
+        foreach (var file in Directory.EnumerateFiles(_workspacePath))
         {
             File.Delete(file);
         }
     }
-
-    private IAgentRunner GetAgentRunner() => _serviceProvider.GetRequiredService<IAgentRunner>();
-
-    private ISessionStore GetSessionStore() => _serviceProvider.GetRequiredService<ISessionStore>();
 
     private void OnChannelChanged(string channelId)
     {
@@ -230,17 +251,16 @@ public sealed class ChatWorkspaceService : IDisposable
         Changed?.Invoke();
     }
 
-    private FileSystemWatcher? CreateWorkspaceWatcher()
+    private FileSystemWatcher CreateWorkspaceWatcher()
     {
-        if (string.IsNullOrWhiteSpace(_workspacePath))
+        if (_workspacePath is null)
         {
-            return null;
+            throw new InvalidOperationException("工作区路径未配置，无法创建文件系统监视器。");
         }
 
-        var fullPath = Path.GetFullPath(_workspacePath);
-        Directory.CreateDirectory(fullPath);
+        Directory.CreateDirectory(_workspacePath);
 
-        var watcher = new FileSystemWatcher(fullPath)
+        var watcher = new FileSystemWatcher(_workspacePath)
         {
             IncludeSubdirectories = true,
             NotifyFilter = NotifyFilters.DirectoryName | NotifyFilters.FileName | NotifyFilters.LastWrite,
@@ -256,46 +276,49 @@ public sealed class ChatWorkspaceService : IDisposable
 
     private void OnWorkspaceFilesChanged(object? sender, FileSystemEventArgs e)
     {
-        NotifyChanged();
+        RefreshWorkspaceEntries();
     }
 
     private void OnWorkspaceFilesRenamed(object? sender, RenamedEventArgs e)
     {
-        NotifyChanged();
+        RefreshWorkspaceEntries();
     }
 
     private IReadOnlyList<WorkspaceEntryNode> GetWorkspaceEntries()
     {
-        if (string.IsNullOrWhiteSpace(_workspacePath))
+        if (_workspacePath is null || !Directory.Exists(_workspacePath))
         {
             return [];
         }
 
-        var fullPath = Path.GetFullPath(_workspacePath);
-        if (!Directory.Exists(fullPath))
-        {
-            return [];
-        }
+        return BuildWorkspaceEntries(_workspacePath, _workspacePath);
+    }
 
-        return BuildWorkspaceEntries(fullPath, fullPath);
+    private IReadOnlyList<WorkspaceEntryNode> CacheWorkspaceEntries()
+    {
+        var entries = GetWorkspaceEntries();
+        return Interlocked.CompareExchange(ref _workspaceEntries, entries, null) ?? entries;
     }
 
     private IReadOnlyList<WorkspaceEntryNode> BuildWorkspaceEntries(string rootPath, string currentPath)
     {
         List<WorkspaceEntryNode> entries = [];
 
-        if (!Directory.Exists(rootPath) || !Directory.Exists(currentPath))
+        if (!Directory.Exists(currentPath))
+        {
             return entries;
+        }
+
         try
         {
-            foreach (var directoryPath in Directory.GetDirectories(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            foreach (var directoryPath in Directory.EnumerateDirectories(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
             {
                 var directoryName = Path.GetFileName(directoryPath);
                 var relativePath = Path.GetRelativePath(rootPath, directoryPath).Replace('\\', '/');
                 entries.Add(new WorkspaceEntryNode(directoryName, relativePath, true, BuildWorkspaceEntries(rootPath, directoryPath)));
             }
 
-            foreach (var filePath in Directory.GetFiles(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            foreach (var filePath in Directory.EnumerateFiles(currentPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
             {
                 var fileName = Path.GetFileName(filePath);
                 var relativePath = Path.GetRelativePath(rootPath, filePath).Replace('\\', '/');
@@ -304,9 +327,9 @@ public sealed class ChatWorkspaceService : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "执行智能体请求失败。");
-            _outputState.AddSystemMessage(_channelId, ex.Message);
+            _logger.LogWarning(ex, "读取工作区目录失败：{DirectoryPath}", currentPath);
         }
+
         return entries;
     }
 
