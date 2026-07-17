@@ -72,7 +72,7 @@ public sealed class ChatWorkspaceService : IDisposable
                 {
                     var sessionStore = GetSessionStore();
                     _session = await sessionStore.LoadAsync(cancellationToken);
-                    GetAgentRunner().RestartSession(_session);
+                    await GetAgentRunner().RestartSessionAsync(_session, cancellationToken);
                 }
 
                 _initialized = true;
@@ -120,7 +120,7 @@ public sealed class ChatWorkspaceService : IDisposable
             _outputState.AddUserMessage(_channelId, input);
             using (_outputState.BeginChannel(_channelId))
             {
-                await GetAgentRunner().ExecuteAsync(input, _session, generationCancellation.Token);
+                await GetAgentRunner().ExecuteAsync([new ChatMessage(ChatRole.User, input)], _session, generationCancellation.Token);
             }
 
             await GetSessionStore().SaveAsync(_session, generationCancellation.Token);
