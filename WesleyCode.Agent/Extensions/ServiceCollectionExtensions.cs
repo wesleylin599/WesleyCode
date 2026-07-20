@@ -22,11 +22,7 @@ public static class ServiceCollectionExtensions
 {
     private const string AgentHttpClientName = "Wesley";
 
-    public static string ComputeMd5(this string target)
-    {
-        var hash = MD5.HashData(Encoding.UTF8.GetBytes(target));
-        return Convert.ToHexString(hash).ToLowerInvariant();
-    }
+    public static string ComputeMd5(this string target) => Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(target))).ToLowerInvariant();
 
     public static IHttpClientBuilder ConfigureHttpClientAgents(this IServiceCollection services, Action<HttpClient> configureClient) =>
         services.AddHttpClient(AgentHttpClientName).ConfigureHttpClient(configureClient);
