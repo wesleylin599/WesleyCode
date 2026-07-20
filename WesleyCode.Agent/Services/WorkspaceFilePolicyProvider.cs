@@ -9,14 +9,12 @@ namespace WesleyCode.Agent.Services;
 internal sealed class WorkspaceFilePolicyProvider : AIContextProvider
 {
     private readonly AgentFileStore _store;
-    private readonly string _workspaceRoot;
+    private readonly IOptions<WorkingOptions> _options;
 
     public WorkspaceFilePolicyProvider(IOptions<WorkingOptions> options)
     {
-        ArgumentNullException.ThrowIfNull(options);
-
-        _workspaceRoot = options.Value.BasePath;
-        _store = new FileSystemAgentFileStore(_workspaceRoot);
+        _options = options;
+        _store = new FileSystemAgentFileStore(_options.Value.BasePath);
     }
 
     protected override ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
@@ -26,7 +24,7 @@ internal sealed class WorkspaceFilePolicyProvider : AIContextProvider
             {
                 Instructions = $"""
                 ## Workspace File Access
-                你可以使用 `workspace_*` 工具直接操作当前工作区文件，工作区根目录是 `{_workspaceRoot}`。
+                你可以使用 `workspace_*` 工具直接操作当前工作区文件，工作区根目录是 `{_options.Value.BasePath}`。
                 所有文件路径都必须相对于工作区根目录，不要使用绝对路径。
                 读取、列目录、搜索、写入文件时优先使用这些工具，不要通过命令行执行文件写入。
                 除非用户明确要求，否则不要删除已有文件，也不要覆盖已有文件。
@@ -58,28 +56,11 @@ internal sealed class WorkspaceFilePolicyProvider : AIContextProvider
         );
     }
 
-    private async Task<string> SaveFileAsync(
-        [Description("要保存的相对文件路径")] string fileName,
-        [Description("要写入文件的内容")] string content,
-        [Description("是否覆盖已存在文件，默认 false")] bool overwrite = false,
-        CancellationToken cancellationToken = default
-    )
-    {
-        Directory.CreateDirectory(_workspaceRoot);
-        if (!overwrite && await _store.FileExistsAsync(fileName, cancellationToken))
-        {
-            return $"文件已存在：{fileName}。如需覆盖请将 overwrite 设为 true。";
-        }
-
-        await _store.WriteAsync(fileName, content, cancellationToken);
-        return overwrite ? $"已写入文件：{fileName}（已覆盖）。" : $"已写入文件：{fileName}。";
-    }
-
     private async Task<string> ReadFileAsync([Description("要读取的相对文件路径")] string fileName, CancellationToken cancellationToken = default)
     {
-        if (!Directory.Exists(_workspaceRoot))
+        if (!Directory.Exists(_options.Value.BasePath))
         {
-            return $"工作区目录不存在：{_workspaceRoot}";
+            return $"工作区目录不存在：{_options.Value.BasePath}";
         }
 
         var content = await _store.ReadAsync(fileName, cancellationToken);
@@ -88,9 +69,9 @@ internal sealed class WorkspaceFilePolicyProvider : AIContextProvider
 
     private async Task<string> DeleteFileAsync([Description("要删除的相对文件路径")] string fileName, CancellationToken cancellationToken = default)
     {
-        if (!Directory.Exists(_workspaceRoot))
+        if (!Directory.Exists(_options.Value.BasePath))
         {
-            return $"工作区目录不存在：{_workspaceRoot}";
+            return $"工作区目录不存在：{_options.Value.BasePath}";
         }
 
         var deleted = await _store.DeleteAsync(fileName, cancellationToken);
@@ -102,7 +83,7 @@ internal sealed class WorkspaceFilePolicyProvider : AIContextProvider
         CancellationToken cancellationToken = default
     )
     {
-        if (!Directory.Exists(_workspaceRoot))
+        if (!Directory.Exists(_options.Value.BasePath))
         {
             return Task.FromResult<IReadOnlyList<FileStoreEntry>>([]);
         }
@@ -116,11 +97,28 @@ internal sealed class WorkspaceFilePolicyProvider : AIContextProvider
         CancellationToken cancellationToken = default
     )
     {
-        if (!Directory.Exists(_workspaceRoot))
+        if (!Directory.Exists(_options.Value.BasePath))
         {
             return Task.FromResult<IReadOnlyList<FileSearchResult>>([]);
         }
 
         return _store.SearchAsync(string.Empty, regexPattern, filePattern, false, cancellationToken);
+    }
+
+    private async Task<string> SaveFileAsync(
+        [Description("要保存的相对文件路径")] string fileName,
+        [Description("要写入文件的内容")] string content,
+        [Description("是否覆盖已存在文件，默认 false")] bool overwrite = false,
+        CancellationToken cancellationToken = default
+    )
+    {
+        Directory.CreateDirectory(_options.Value.BasePath);
+        if (!overwrite && await _store.FileExistsAsync(fileName, cancellationToken))
+        {
+            return $"文件已存在：{fileName}。如需覆盖请将 overwrite 设为 true。";
+        }
+
+        await _store.WriteAsync(fileName, content, cancellationToken);
+        return overwrite ? $"已写入文件：{fileName}（已覆盖）。" : $"已写入文件：{fileName}。";
     }
 }

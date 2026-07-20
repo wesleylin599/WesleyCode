@@ -11,7 +11,9 @@ WesleyCode 是一个基于 .NET 10 的智能体宿主项目，提供控制台和
 - 内置工作区文件读写、搜索、列目录等工具
 - 支持技能目录加载，扩展智能体能力
 - 支持会话持久化，保留历史上下文
-- Web 端支持查看工作区文件树、下载工作区压缩包、新建对话
+- Web 端支持多会话管理，每个会话拥有独立工作区和历史上下文
+- 支持工作区文件预览、在线编辑、压缩包下载与检查点回滚
+- 支持通过 Web 页面配置模型 Provider、Model Id 和 Base URL
 
 ## 项目结构
 
@@ -162,8 +164,15 @@ dotnet run --project .\WesleyCode.Web\
 Web 版工作区默认位于应用目录下的 `workspace` 目录，并提供：
 
 - 新建对话
+- 切换、重命名和删除历史对话
 - 工作区文件树预览
-- 工作区打包下载 `/workspace/archive`
+- 文本文件在线编辑
+- 手动检查点和自动修改前检查点
+- 当前会话工作区打包下载 `/workspace/archive/{conversationId}`
+
+多会话数据保存在应用目录下的 `conversations` 目录。首次升级时，旧版 `workspace` 和对应会话会复制到“导入的对话”，原数据不会被删除。
+
+模型设置页位于 `/settings`，保存 Provider、Model Id 和 Base URL 到本地 `model-settings.json`，重启 Web 应用后生效。API Key 不会由页面保存，仍需通过 `WESLEY_APIKEY` 环境变量或用户机密提供；环境变量优先于页面配置。
 
 ## 工作机制说明
 

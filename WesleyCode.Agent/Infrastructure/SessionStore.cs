@@ -42,7 +42,7 @@ public sealed class SessionStore : ISessionStore
             var content = await File.ReadAllTextAsync(_sessionHistoryPath, Encoding.UTF8, cancellationToken);
             if (string.IsNullOrWhiteSpace(content))
             {
-                await BackupInvalidSessionAsync("会话文件为空", cancellationToken);
+                BackupInvalidSession("会话文件为空");
                 return await _agentRunner.CreateSessionAsync(cancellationToken);
             }
 
@@ -55,7 +55,7 @@ public sealed class SessionStore : ISessionStore
         }
         catch (Exception ex) when (ex is JsonException or IOException or InvalidOperationException or UnauthorizedAccessException)
         {
-            await BackupInvalidSessionAsync("会话文件损坏或无法读取", cancellationToken);
+            BackupInvalidSession("会话文件损坏或无法读取");
             _logger.LogWarning(ex, "Failed to load session history, starting new session: {SessionPath}", _sessionHistoryPath);
             return await _agentRunner.CreateSessionAsync(cancellationToken);
         }
@@ -126,20 +126,15 @@ public sealed class SessionStore : ISessionStore
         return Task.CompletedTask;
     }
 
-    private async Task BackupInvalidSessionAsync(string reason, CancellationToken cancellationToken)
+    private void BackupInvalidSession(string reason)
     {
         if (!File.Exists(_sessionHistoryPath))
         {
             return;
         }
 
-        var lockAcquired = false;
         try
         {
-            // 使用文件锁确保线程安全
-            await _fileLock.WaitAsync(cancellationToken);
-            lockAcquired = true;
-
             var directory = Path.GetDirectoryName(_sessionHistoryPath) ?? AppContext.BaseDirectory;
             Directory.CreateDirectory(directory);
             var backupPath = Path.Combine(
@@ -149,20 +144,9 @@ public sealed class SessionStore : ISessionStore
             File.Move(_sessionHistoryPath, backupPath);
             _logger.LogWarning("{Reason}，已备份原会话文件: {BackupPath}", reason, backupPath);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "{Reason}，但备份会话文件失败: {SessionPath}", reason, _sessionHistoryPath);
-        }
-        finally
-        {
-            if (lockAcquired)
-            {
-                _fileLock.Release();
-            }
         }
     }
 }

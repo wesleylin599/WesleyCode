@@ -24,8 +24,7 @@ public static class ServiceCollectionExtensions
 
     public static string ComputeMd5(this string target)
     {
-        using var md5 = MD5.Create();
-        var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(target));
+        var hash = MD5.HashData(Encoding.UTF8.GetBytes(target));
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
@@ -91,6 +90,11 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
+        services.AddTransient<AIContextProvider>(provider => new FileAccessProvider(
+            new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "shared")),
+            new FileAccessProviderOptions { DisableReadOnlyToolApproval = true, DisableWriteToolApproval = true }
+        ));
+
         services.AddTransient<AIContextProvider>(provider =>
             new AgentSkillsProviderBuilder()
                 .UseOptions(options =>
@@ -149,26 +153,6 @@ public static class ServiceCollectionExtensions
         };
     }
 
-    private static IChatClient CreateAnthropicChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
-    {
-        if (string.IsNullOrWhiteSpace(options.ApiKey))
-        {
-            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
-        }
-        var endpoint = GetEndpoint(options.BaseUrl);
-        var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
-        var client = endpoint is null
-            ? new AnthropicClient { ApiKey = options.ApiKey, HttpClient = httpClient }
-            : new AnthropicClient
-            {
-                ApiKey = options.ApiKey,
-                BaseUrl = endpoint.ToString().TrimEnd('/'),
-                HttpClient = httpClient,
-            };
-
-        return client.AsIChatClient(options.ModelId);
-    }
-
     private static IChatClient CreateOpenAiChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
     {
         if (string.IsNullOrWhiteSpace(options.ModelId))
@@ -194,24 +178,40 @@ public static class ServiceCollectionExtensions
         return new OpenAIClient(new ApiKeyCredential(options.ApiKey), clientOptions).GetResponsesClient().AsIChatClient(options.ModelId);
     }
 
-    private static IChatClient CreateOllamaChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
+    private static IChatClient CreateAnthropicChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
+        }
+        var endpoint = GetEndpoint(options.BaseUrl);
+        var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
+        var client = endpoint is null
+            ? new AnthropicClient { ApiKey = options.ApiKey, HttpClient = httpClient }
+            : new AnthropicClient
+            {
+                ApiKey = options.ApiKey,
+                BaseUrl = endpoint.ToString().TrimEnd('/'),
+                HttpClient = httpClient,
+            };
+
+        return client.AsIChatClient(options.ModelId);
+    }
+
+    private static OllamaApiClient CreateOllamaChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
     {
         if (string.IsNullOrWhiteSpace(options.ModelId))
         {
             throw new InvalidOperationException("未配置 Model Id，请设置 WESLEY_MODELID。");
         }
-        var endpoint = GetEndpoint(options.BaseUrl);
-        if (endpoint is null)
-        {
-            throw new InvalidOperationException("未配置 BaseUrl，请设置 WESLEY_BASEURL。");
-        }
+        var endpoint = GetEndpoint(options.BaseUrl) ?? throw new InvalidOperationException("未配置 BaseUrl，请设置 WESLEY_BASEURL。");
         var httpClient = httpClientFactory.CreateClient(AgentHttpClientName);
         httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {options.ApiKey}");
         httpClient.BaseAddress = endpoint;
         return new OllamaApiClient(httpClient, options.ModelId);
     }
 
-    private static IChatClient CreateCrsChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
+    private static ClaudeRelayServiceChatClient CreateCrsChatClient(ChatClientOptions options, IHttpClientFactory httpClientFactory)
     {
         if (string.IsNullOrWhiteSpace(options.ModelId))
         {
