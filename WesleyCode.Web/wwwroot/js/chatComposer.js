@@ -72,7 +72,8 @@ export function scrollToBottom(anchor, composerShell, force = false) {
         }
     }
 
-    scrollViewportToTarget(anchor, composerShell, force ? 'auto' : 'smooth');
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    scrollViewportToTarget(anchor, composerShell, force || prefersReducedMotion ? 'auto' : 'smooth');
 
     if (state) {
         requestAnimationFrame(() => {

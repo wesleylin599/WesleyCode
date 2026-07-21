@@ -47,6 +47,16 @@ public static class ServiceCollectionExtensions
                 }
             );
         services
+            .AddOptions<ImageClientOptions>()
+            .Configure<IConfiguration>(
+                (options, configuration) =>
+                {
+                    options.ModelId = configuration.GetValue<string>("WESLEY_IMAGE_MODELID");
+                    options.BaseUrl = configuration.GetValue<string>("WESLEY_IMAGE_BASEURL");
+                    options.ApiKey = configuration.GetValue<string>("WESLEY_IMAGE_APIKEY");
+                }
+            );
+        services
             .AddOptions<AgentOptions>()
             .Configure(config =>
             {
@@ -80,6 +90,8 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<AIContextProvider, NetworkRequestProvider>();
 
+        services.AddTransient<AIContextProvider, ImageGenerationProvider>();
+
         services.AddTransient<AIContextProvider, WorkspaceFilePolicyProvider>();
 
         services.AddTransient<AIContextProvider>(provider => new UserSkillsProvider(skills));
@@ -88,7 +100,12 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<AIContextProvider>(provider => new FileAccessProvider(
             new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "shared")),
-            new FileAccessProviderOptions { DisableReadOnlyToolApproval = true, DisableWriteToolApproval = true }
+            new FileAccessProviderOptions
+            {
+                DisableReadOnlyToolApproval = true,
+                DisableWriteToolApproval = true,
+                DisableWriteTools = true,
+            }
         ));
 
         services.AddTransient<AIContextProvider>(provider =>

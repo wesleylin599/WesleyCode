@@ -13,9 +13,12 @@
 <div class="chat-page">
     <header class="chat-header">
         <div>
-            <p class="page-title">WesleyCode 对话台</p>
+            <p class="page-title">开发助手</p>
+            <h1>今天想构建什么？</h1>
+            <p class="page-subtitle">描述目标，WesleyCode 会读取工作区并与你一起完成。</p>
         </div>
-        <div class="status-pill @(Workspace.IsBusy ? "busy" : string.Empty)">
+        <div class="status-pill @(Workspace.IsBusy ? "busy" : string.Empty)" role="status">
+            <span class="status-dot" aria-hidden="true"></span>
             @(Workspace.IsBusy ? "生成中" : "已连接")
         </div>
     </header>
@@ -24,8 +27,14 @@
         @if (Turns.Count == 0)
         {
             <div class="empty-state">
-                <div class="empty-badge">AI</div>
-                <h3>开始一个新任务</h3>
+                <div class="empty-badge" aria-hidden="true">W</div>
+                <h2>从一个清晰的目标开始</h2>
+                <p>我可以理解仓库、修改代码并验证结果。试着描述你希望完成的功能或遇到的问题。</p>
+                <div class="prompt-suggestions" aria-label="示例任务">
+                    <span>实现一个新功能</span>
+                    <span>定位并修复问题</span>
+                    <span>优化现有代码</span>
+                </div>
             </div>
         }
         else
@@ -116,7 +125,7 @@
     </section>
 
     <div class="composer-shell" @ref="_composerShell">
-        <div class="composer-hint">Enter 发送，Shift + Enter 手动换行。</div>
+        <div class="composer-hint"><span aria-hidden="true">⌘</span> Enter 发送 · Shift + Enter 换行</div>
         <div class="composer-panel">
             <textarea
                 @ref="_composer"
@@ -131,7 +140,10 @@
             }
             else
             {
-                <button class="send-button" @onclick="SendAsync" disabled="@(string.IsNullOrWhiteSpace(_input))">发送</button>
+                <button class="send-button" @onclick="SendAsync" disabled="@(string.IsNullOrWhiteSpace(_input))">
+                    <span>发送</span>
+                    <span class="send-arrow" aria-hidden="true">↑</span>
+                </button>
             }
         </div>
     </div>

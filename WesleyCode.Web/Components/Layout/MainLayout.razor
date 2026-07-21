@@ -9,23 +9,29 @@
 <div class="shell" style="@GetShellStyle()">
     <aside class="sidebar">
         <div class="sidebar-main">
-            <div>
-                <div class="brand-mark">W</div>
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">W</div>
                 <div class="brand-copy">
                     <p class="brand-eyebrow">WesleyCode</p>
+                    <p class="brand-name">智能开发工作台</p>
                 </div>
             </div>
 
             <section class="sidebar-section sidebar-status-card">
-                <span class="sidebar-label">状态</span>
-                <p>@(Workspace.IsBusy ? "正在生成响应..." : "已就绪，等待输入。")</p>
+                <span class="status-indicator @(Workspace.IsBusy ? "busy" : string.Empty)" aria-hidden="true"></span>
+                <div>
+                    <span class="sidebar-label">运行状态</span>
+                    <p>@(Workspace.IsBusy ? "正在处理你的任务" : "已就绪，可以开始")</p>
+                </div>
             </section>
 
             <button class="sidebar-action" @onclick="CreateNewConversationAsync" disabled="@Workspace.IsBusy">
+                <span class="action-icon" aria-hidden="true">＋</span>
                 <span>新建对话</span>
             </button>
 
             <a class="sidebar-action sidebar-action-secondary" href="/workspace/archive">
+                <span class="action-icon download-icon" aria-hidden="true">↓</span>
                 <span>下载工作区</span>
             </a>
 

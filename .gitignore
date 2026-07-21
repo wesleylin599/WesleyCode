@@ -369,4 +369,5 @@ _work/
 #_work/
 # Local agent and tool outputs
 artifacts/
+.codex/
 appsettings.*.json
