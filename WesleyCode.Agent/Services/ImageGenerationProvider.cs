@@ -83,13 +83,4 @@ internal sealed class ImageGenerationProvider : AIContextProvider
             }
         }
     }
-
-    private class ImageFormat
-    {
-        [Description("图片名称")]
-        public string Name { get; set; } = string.Empty;
-
-        [Description("图片base64数据")]
-        public string Data { get; set; } = string.Empty;
-    }
 }
