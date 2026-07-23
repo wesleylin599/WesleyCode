@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Anthropic;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -108,6 +109,22 @@ public static class ServiceCollectionExtensions
                 DisableWriteToolApproval = true,
                 DisableWriteTools = true,
             }
+        ));
+
+        services.AddTransient<AIContextProvider>(provider => new CompactionProvider(
+            new PipelineCompactionStrategy(
+                new ToolResultCompactionStrategy(
+                    trigger: CompactionTriggers.All(CompactionTriggers.HasToolCalls(), CompactionTriggers.TokensExceed(20000)),
+                    minimumPreservedGroups: 16,
+                    target: CompactionTriggers.TokensBelow(12000)
+                ),
+                new TruncationCompactionStrategy(
+                    trigger: CompactionTriggers.Any(CompactionTriggers.GroupsExceed(50), CompactionTriggers.TokensExceed(50000)),
+                    minimumPreservedGroups: 32,
+                    target: CompactionTriggers.TokensBelow(20000)
+                )
+            ),
+            loggerFactory: provider.GetRequiredService<ILoggerFactory>()
         ));
 
         services.AddTransient<AIContextProvider>(provider =>

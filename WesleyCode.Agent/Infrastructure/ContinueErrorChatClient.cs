@@ -22,7 +22,7 @@ public class ContinueErrorChatClient : DelegatingChatClient
         {
             return new ChatResponse(
                 new ChatMessage(
-                    ChatRole.System,
+                    ChatRole.Assistant,
                     [
                         new ErrorContent($"发生一个错误: {ex.Message}")
                         {
@@ -61,7 +61,7 @@ public class ContinueErrorChatClient : DelegatingChatClient
                 catch (Exception ex)
                 {
                     update = new ChatResponseUpdate(
-                        ChatRole.System,
+                        ChatRole.Assistant,
                         [
                             new ErrorContent($"发生一个错误: {ex.Message}")
                             {

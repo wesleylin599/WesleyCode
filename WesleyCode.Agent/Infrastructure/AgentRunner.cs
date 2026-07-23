@@ -2,7 +2,6 @@
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
@@ -11,23 +10,24 @@ namespace WesleyCode.Agent.Infrastructure;
 
 internal class AgentRunner : IAgentRunner
 {
-    private static IEnumerable<Func<ToolAutoApprovalRuleContext, ValueTask<bool>>> _ApprovalRules = [context => ValueTask.FromResult(true)];
-
     private readonly AIAgent _agent;
     private readonly IOutputCapture _capture;
 
-    public AgentRunner(IChatClient client, IOutputCapture capture, IServiceProvider provider, IOptions<AgentOptions> options)
+    public AgentRunner(IChatClient client, IOutputCapture capture, IEnumerable<AIContextProvider> providers, IOptions<AgentOptions> options)
     {
-        var baseAgent = client.AsAIAgent(
-            options: new ChatClientAgentOptions
-            {
-                Name = options.Value.Name,
-                Description = options.Value.Description,
-                ChatOptions = new ChatOptions { Instructions = options.Value.Instructions },
-                AIContextProviders = provider.GetServices<AIContextProvider>(),
-            }
-        );
-        this._agent = baseAgent.AsBuilder().UseToolApproval(new ToolApprovalAgentOptions() { AutoApprovalRules = _ApprovalRules }).Build();
+        this._agent = client
+            .AsAIAgent(
+                options: new ChatClientAgentOptions
+                {
+                    Name = options.Value.Name,
+                    Description = options.Value.Description,
+                    ChatOptions = new ChatOptions { Instructions = options.Value.Instructions },
+                    AIContextProviders = providers,
+                }
+            )
+            .AsBuilder()
+            .UseToolApproval(new ToolApprovalAgentOptions() { AutoApprovalRules = [context => ValueTask.FromResult(true)] })
+            .Build();
         this._capture = capture;
     }
 
