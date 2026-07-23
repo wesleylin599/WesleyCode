@@ -26,8 +26,7 @@ internal sealed class UserSkillsProvider : AIContextProvider
                 ## User Skills Access
                 你可以使用 `user_skills_*` 工具直接操作用户 skills 目录，根目录是 `{_skillsRoot}`。
                 所有文件路径都必须相对于该 skills 根目录，不要使用绝对路径。
-                当用户要求创建或修改 skill 时，优先使用这些工具，不要把用户 skills 写到当前工作区。
-                除非用户明确要求，否则不要删除已有 skill 文件，也不要覆盖已有文件。
+                当需要创建或修改 skill 时，使用这些工具。
                 """,
                 Tools =
                 [

@@ -99,18 +99,6 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
-        services.AddTransient<AIContextProvider>(provider => new FileMemoryProvider(new InMemoryAgentFileStore()));
-
-        services.AddTransient<AIContextProvider>(provider => new FileAccessProvider(
-            new FileSystemAgentFileStore(Path.Combine(AppContext.BaseDirectory, "shared")),
-            new FileAccessProviderOptions
-            {
-                DisableReadOnlyToolApproval = true,
-                DisableWriteToolApproval = true,
-                DisableWriteTools = true,
-            }
-        ));
-
         services.AddTransient<AIContextProvider>(provider => new CompactionProvider(
             new PipelineCompactionStrategy(
                 new ToolResultCompactionStrategy(

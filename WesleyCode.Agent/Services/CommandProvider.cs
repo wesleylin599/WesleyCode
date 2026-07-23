@@ -27,7 +27,6 @@ internal sealed class CommandProvider : AIContextProvider
                 当前使用的命令行工具是`{CliWrapRunner.FileName}`
                 命令行工具的工作目录在`{_options.Value.BasePath}`
                 使用`run_command`来调用命令行工具执行命令
-                禁止用于文件写入操作
                 """,
                 Tools = [AIFunctionFactory.Create(Command, new AIFunctionFactoryOptions { Name = "command_run", Description = "执行命令行" })],
             }

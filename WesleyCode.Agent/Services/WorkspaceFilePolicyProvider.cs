@@ -26,8 +26,7 @@ internal sealed class WorkspaceFilePolicyProvider : AIContextProvider
                 ## Workspace File Access
                 你可以使用 `workspace_*` 工具直接操作当前工作区文件，工作区根目录是 `{_options.Value.BasePath}`。
                 所有文件路径都必须相对于工作区根目录，不要使用绝对路径。
-                读取、列目录、搜索、写入文件时优先使用这些工具，不要通过命令行执行文件写入。
-                除非用户明确要求，否则不要删除已有文件，也不要覆盖已有文件。
+                当需要创建或修改文件，使用这些工具。
                 """,
                 Tools =
                 [
