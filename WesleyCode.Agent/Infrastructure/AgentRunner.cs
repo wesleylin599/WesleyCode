@@ -11,12 +11,14 @@ namespace WesleyCode.Agent.Infrastructure;
 
 internal class AgentRunner : IAgentRunner
 {
+    private static IEnumerable<Func<ToolAutoApprovalRuleContext, ValueTask<bool>>> _ApprovalRules = [context => ValueTask.FromResult(true)];
+
     private readonly AIAgent _agent;
     private readonly IOutputCapture _capture;
 
     public AgentRunner(IChatClient client, IOutputCapture capture, IServiceProvider provider, IOptions<AgentOptions> options)
     {
-        this._agent = client.AsAIAgent(
+        var baseAgent = client.AsAIAgent(
             options: new ChatClientAgentOptions
             {
                 Name = options.Value.Name,
@@ -25,6 +27,7 @@ internal class AgentRunner : IAgentRunner
                 AIContextProviders = provider.GetServices<AIContextProvider>(),
             }
         );
+        this._agent = baseAgent.AsBuilder().UseToolApproval(new ToolApprovalAgentOptions() { AutoApprovalRules = _ApprovalRules }).Build();
         this._capture = capture;
     }
 
