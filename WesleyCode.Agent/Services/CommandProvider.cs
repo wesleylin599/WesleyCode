@@ -25,23 +25,30 @@ internal sealed class CommandProvider : AIContextProvider
                 Instructions = $"""
                 ## Command
                 当前使用的命令行工具是`{CliWrapRunner.FileName}`
-                命令行工具的工作目录在`{_options.Value.BasePath}`
+                命令行工具的工作目录路径是`{_options.Value.BasePath}`
                 使用`run_command`来调用命令行工具执行命令
                 """,
-                Tools = [AIFunctionFactory.Create(Command, new AIFunctionFactoryOptions { Name = "command_run", Description = "执行命令行" })],
+                Tools =
+                [
+                    AIFunctionFactory.Create(CommandRunAsync, new AIFunctionFactoryOptions { Name = "command_run", Description = "执行命令行" }),
+                ],
             }
         );
     }
 
-    private async Task<CommandResult> Command([Description("命令调用模型")] CommandItem item, CancellationToken cancellationToken = default)
+    private async Task<CommandRunResult> CommandRunAsync(
+        [Description("命令行")] string command,
+        [Description("执行超时时间/秒")] int timeout,
+        CancellationToken cancellationToken = default
+    )
     {
-        CommandResult output = new CommandResult();
+        CommandRunResult output = new CommandRunResult();
         try
         {
-            if (string.IsNullOrEmpty(item.Command))
-                throw new ArgumentNullException(nameof(item.Command));
+            if (string.IsNullOrEmpty(command))
+                throw new ArgumentNullException(nameof(command));
 
-            var timeoutSeconds = item.TimeoutSeconds <= 0 ? 300 : Math.Min(item.TimeoutSeconds, 3600);
+            var timeoutSeconds = timeout <= 0 ? 300 : Math.Min(timeout, 3600);
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
@@ -49,7 +56,7 @@ internal sealed class CommandProvider : AIContextProvider
             using var standardError = new MemoryStream();
 
             var cli = Cli.Wrap(CliWrapRunner.FileName)
-                .WithArguments(item.Command)
+                .WithArguments(command)
                 .WithWorkingDirectory(_options.Value.BasePath)
                 .WithStandardOutputPipe(PipeTarget.ToStream(standardOutput))
                 .WithStandardErrorPipe(PipeTarget.ToStream(standardError))
@@ -68,18 +75,7 @@ internal sealed class CommandProvider : AIContextProvider
         return output;
     }
 
-    sealed class CommandItem
-    {
-        [Description("命令行")]
-        [JsonPropertyName("command")]
-        public string Command { get; set; } = string.Empty;
-
-        [Description("执行超时时间")]
-        [JsonPropertyName("timeout_seconds")]
-        public int TimeoutSeconds { get; set; }
-    }
-
-    sealed class CommandResult
+    sealed class CommandRunResult
     {
         [JsonPropertyName("exit_code")]
         public int ExitCode { get; set; }

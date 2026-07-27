@@ -41,38 +41,50 @@ internal class AgentRunner : IAgentRunner
 
     public async Task<AgentResponse> ExecuteAsync(List<ChatMessage> input, AgentSession session, CancellationToken cancellationToken = default)
     {
-        StringBuilder builder = new StringBuilder();
+        string currentMessageId = string.Empty;
+        ChatRole currentChatRole = ChatRole.Assistant;
+        StringBuilder currentBuilder = new StringBuilder();
         List<AgentResponseUpdate> agentResponses = new List<AgentResponseUpdate>();
-        try
+        await foreach (var responseUpdate in _agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
         {
-            await foreach (var responseUpdate in _agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken))
+            foreach (var content in responseUpdate.Contents)
             {
-                foreach (var content in responseUpdate.Contents)
+                if (content is TextContent textContent)
                 {
-                    if (content is TextContent textContent)
-                    {
-                        builder.Append(textContent.Text);
-                    }
-                    else if (builder.Length > 0)
-                    {
-                        _capture.WriteAgentMessage(builder.ToString());
-                        builder.Clear();
-                    }
-
-                    CommonWriteMessage(responseUpdate.AuthorName, content);
+                    currentBuilder.Append(textContent.Text);
                 }
-                agentResponses.Add(responseUpdate);
+                CommonWriteMessage(responseUpdate.AuthorName, content);
             }
-        }
-        finally
-        {
-            if (builder.Length > 0)
+            if (NotEmptyOrEqual(responseUpdate.MessageId, currentMessageId) || NotNullOrEqual(responseUpdate.Role, currentChatRole))
             {
-                _capture.WriteAgentMessage(builder.ToString());
-                builder.Clear();
+                if (responseUpdate.Role is ChatRole role)
+                {
+                    currentChatRole = role;
+                }
+                if (responseUpdate.MessageId is { Length: > 0 })
+                {
+                    currentMessageId = responseUpdate.MessageId;
+                }
+                WriteAgentMessage(_capture, currentBuilder);
+            }
+            agentResponses.Add(responseUpdate);
+        }
+        WriteAgentMessage(_capture, currentBuilder);
+
+        return agentResponses.ToAgentResponse();
+
+        static bool NotEmptyOrEqual(string? s1, string? s2) => s1 is { Length: > 0 } str1 && s2 is { Length: > 0 } str2 && str1 != str2;
+
+        static bool NotNullOrEqual(ChatRole? r1, ChatRole? r2) => r1.HasValue && r2.HasValue && r1.Value != r2.Value;
+
+        static void WriteAgentMessage(IOutputCapture capture, StringBuilder currentBuilder)
+        {
+            if (currentBuilder.Length > 0)
+            {
+                capture.WriteAgentMessage(currentBuilder.ToString());
+                currentBuilder.Clear();
             }
         }
-        return agentResponses.ToAgentResponse();
     }
 
     public Task RestartSessionAsync(AgentSession activeSession, CancellationToken cancellationToken = default)

@@ -100,17 +100,10 @@ public static class ServiceCollectionExtensions
         services.AddTransient<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
 
         services.AddTransient<AIContextProvider>(provider => new CompactionProvider(
-            new PipelineCompactionStrategy(
-                new ToolResultCompactionStrategy(
-                    trigger: CompactionTriggers.All(CompactionTriggers.HasToolCalls(), CompactionTriggers.TokensExceed(20000)),
-                    minimumPreservedGroups: 16,
-                    target: CompactionTriggers.TokensBelow(12000)
-                ),
-                new TruncationCompactionStrategy(
-                    trigger: CompactionTriggers.Any(CompactionTriggers.GroupsExceed(50), CompactionTriggers.TokensExceed(50000)),
-                    minimumPreservedGroups: 32,
-                    target: CompactionTriggers.TokensBelow(20000)
-                )
+            new TruncationCompactionStrategy(
+                trigger: CompactionTriggers.Any(CompactionTriggers.GroupsExceed(50), CompactionTriggers.TokensExceed(50000)),
+                minimumPreservedGroups: 32,
+                target: CompactionTriggers.TokensBelow(20000)
             ),
             loggerFactory: provider.GetRequiredService<ILoggerFactory>()
         ));

@@ -39,18 +39,21 @@ internal sealed class NetworkRequestProvider : AIContextProvider
     }
 
     private async Task<HttpResponseResult> NetworkRequestAsync(
-        [Description("HTTP 请求参数")] HttpRequestItem item,
+        [Description("请求地址")] string url,
+        [Description("请求方式")] string method,
+        [Description("请求正文")] string? body,
+        [Description("请求头")] Dictionary<string, string>? headers,
         CancellationToken cancellationToken = default
     )
     {
-        if (string.IsNullOrWhiteSpace(item.Url))
+        if (string.IsNullOrWhiteSpace(url))
         {
             return new HttpResponseResult { StatusCode = 400, Body = "Url 不能为空。" };
         }
 
-        if (!Uri.TryCreate(item.Url, UriKind.Absolute, out var requestUri))
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var requestUri))
         {
-            return new HttpResponseResult { StatusCode = 400, Body = $"Url 无效：{item.Url}" };
+            return new HttpResponseResult { StatusCode = 400, Body = $"Url 无效：{url}" };
         }
 
         if (
@@ -58,18 +61,18 @@ internal sealed class NetworkRequestProvider : AIContextProvider
             && !string.Equals(requestUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
         )
         {
-            return new HttpResponseResult { StatusCode = 400, Body = $"仅支持 HTTP/HTTPS 请求：{item.Url}" };
+            return new HttpResponseResult { StatusCode = 400, Body = $"仅支持 HTTP/HTTPS 请求：{url}" };
         }
 
-        var methodName = string.IsNullOrWhiteSpace(item.Method) ? "GET" : item.Method.Trim().ToUpperInvariant();
+        var methodName = string.IsNullOrWhiteSpace(method) ? "GET" : method.Trim().ToUpperInvariant();
 
         try
         {
             using var request = new HttpRequestMessage(new HttpMethod(methodName), requestUri);
-            request.Content ??= new StringContent(item.Body ?? string.Empty, Encoding.UTF8);
-            if (item.Headers is not null)
+            request.Content ??= new StringContent(body ?? string.Empty, Encoding.UTF8);
+            if (headers is not null)
             {
-                foreach (var header in item.Headers)
+                foreach (var header in headers)
                 {
                     if (!request.Headers.TryAddWithoutValidation(header.Key, header.Value))
                     {
@@ -81,21 +84,21 @@ internal sealed class NetworkRequestProvider : AIContextProvider
             var client = _httpClientFactory.CreateClient();
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
-            var headers = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+            var resultHeaders = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
             foreach (var header in response.Headers)
             {
-                headers[header.Key] = header.Value.ToArray();
+                resultHeaders[header.Key] = header.Value.ToArray();
             }
             foreach (var header in response.Content.Headers)
             {
-                headers[header.Key] = header.Value.ToArray();
+                resultHeaders[header.Key] = header.Value.ToArray();
             }
 
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
             return new HttpResponseResult
             {
                 StatusCode = (int)response.StatusCode,
-                Headers = headers,
+                Headers = resultHeaders,
                 Body = responseBody,
             };
         }
@@ -104,35 +107,16 @@ internal sealed class NetworkRequestProvider : AIContextProvider
             return new HttpResponseResult { StatusCode = 500, Body = $"请求失败：{ex.GetBaseException().Message}" };
         }
     }
-}
 
-sealed class HttpRequestItem
-{
-    [Description("请求地址")]
-    [JsonPropertyName("url")]
-    public string Url { get; set; } = string.Empty;
+    sealed class HttpResponseResult
+    {
+        [JsonPropertyName("status_code")]
+        public int StatusCode { get; set; }
 
-    [Description("请求方式")]
-    [JsonPropertyName("method")]
-    public string Method { get; set; } = string.Empty;
+        [JsonPropertyName("headers")]
+        public Dictionary<string, string[]> Headers { get; set; } = [];
 
-    [Description("请求头")]
-    [JsonPropertyName("headers")]
-    public Dictionary<string, string>? Headers { get; set; }
-
-    [Description("请求正文")]
-    [JsonPropertyName("body")]
-    public string? Body { get; set; }
-}
-
-sealed class HttpResponseResult
-{
-    [JsonPropertyName("status_code")]
-    public int StatusCode { get; set; }
-
-    [JsonPropertyName("headers")]
-    public Dictionary<string, string[]> Headers { get; set; } = [];
-
-    [JsonPropertyName("body")]
-    public string Body { get; set; } = string.Empty;
+        [JsonPropertyName("body")]
+        public string Body { get; set; } = string.Empty;
+    }
 }
