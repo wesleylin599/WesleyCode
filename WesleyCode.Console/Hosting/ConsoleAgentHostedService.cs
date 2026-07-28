@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using Microsoft.Agents.AI;
+﻿using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using Spectre.Console;
@@ -81,14 +80,11 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             return;
         }
 
-        var stopwatch = Stopwatch.StartNew();
         try
         {
             await _sessionStore.SaveAsync(session, cancellationToken);
-            stopwatch.Stop();
             _lastSavedAt = DateTimeOffset.UtcNow;
             _sessionDirty = false;
-            _logger.LogDebug("Session persisted in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
@@ -134,7 +130,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 }
 
                 using var source = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                var stopwatch = Stopwatch.StartNew();
                 try
                 {
                     List<ChatMessage> messages = [new ChatMessage(ChatRole.User, input)];
@@ -152,8 +147,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 {
                     source.Cancel();
                 }
-                stopwatch.Stop();
-                _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
             }
             catch (Exception ex)
             {
