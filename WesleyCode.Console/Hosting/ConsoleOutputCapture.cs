@@ -1,5 +1,6 @@
 ﻿using System.Text.Encodings.Web;
 using System.Text.Json;
+using Spectre.Console;
 using WesleyCode.Agent.Interfaces;
 
 namespace WesleyCode.Console.Hosting;
@@ -17,37 +18,34 @@ internal class ConsoleOutputCapture : IOutputCapture
 
     public void WriteUserTitle()
     {
-        System.Console.ResetColor();
-        System.Console.ForegroundColor = ConsoleColor.Cyan;
-        System.Console.WriteLine("> User >>>");
-        System.Console.ResetColor();
-        System.Console.Write("  ");
+        AnsiConsole.Cursor.Show();
+        WriteText($"> User >>>{Environment.NewLine}", Color.Aqua);
+        WriteText("  ", Color.Silver);
     }
 
-    public void WriteUserMessage(string message) => WriteBlock("User", message, ConsoleColor.Cyan, ConsoleColor.Gray);
+    public void WriteUserMessage(string message) => WriteBlock("User", message, Color.Aqua, Color.Silver);
 
-    public void WriteAgentMessage(string message) => WriteBlock("Agent", message, ConsoleColor.Green, ConsoleColor.Gray);
+    public void WriteAgentMessage(string message) => WriteBlock("Agent", message, Color.Lime, Color.Silver);
 
-    public void WriteSystemMessage(string message) => WriteBlock("System", message, ConsoleColor.Magenta, ConsoleColor.Gray);
+    public void WriteSystemMessage(string message) => WriteBlock("System", message, Color.Fuchsia, Color.Silver);
 
     public void WriteToolCall(string callId, string? target, string toolName, IDictionary<string, object?>? arguments) =>
-        WriteBlock($"[{callId}] {target ?? "unknow"}:{toolName}", TruncateLine(arguments), ConsoleColor.DarkYellow, ConsoleColor.DarkGray);
+        WriteBlock($"[{callId}] {target ?? "unknow"}:{toolName}", TruncateLine(arguments), Color.Olive, Color.Grey);
 
     public void WriteToolResult(string callId, string? target, object? result) =>
-        WriteBlock($"[{callId}] {target ?? "unknow"}:result", TruncateLine(result), ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
+        WriteBlock($"[{callId}] {target ?? "unknow"}:result", TruncateLine(result), Color.Navy, Color.Grey);
 
-    private static void WriteBlock(string title, string message, ConsoleColor titleColor, ConsoleColor contentColor)
+    private static void WriteBlock(string title, string message, Color titleColor, Color contentColor)
     {
-        System.Console.ForegroundColor = titleColor;
-        System.Console.WriteLine($"> {title} >>>");
+        WriteText($"> {title} >>>{Environment.NewLine}", titleColor);
 
-        System.Console.ForegroundColor = contentColor;
         foreach (var line in Normalize(message))
         {
-            System.Console.WriteLine($"  {line}");
+            WriteText($"  {line}{Environment.NewLine}", contentColor);
         }
-        System.Console.ResetColor();
     }
+
+    private static void WriteText(string text, Color color) => AnsiConsole.Write(new Text(text, new Style(color)));
 
     private static IEnumerable<string> Normalize(string? message)
     {

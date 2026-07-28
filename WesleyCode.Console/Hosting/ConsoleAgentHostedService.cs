@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
-using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using Spectre.Console;
 using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
 
@@ -96,30 +96,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         }
     }
 
-    private async Task CancelAgentAsync(CancellationTokenSource source)
-    {
-        while (!source.IsCancellationRequested)
-        {
-            try
-            {
-                if (System.Console.KeyAvailable)
-                {
-                    var key = System.Console.ReadKey(intercept: true);
-                    if (key.Key == ConsoleKey.Escape)
-                    {
-                        _logger.LogInformation("收到取消指令，正在停止当前执行。");
-                        source.Cancel();
-                    }
-                }
-                await Task.Delay(50, source.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-        }
-    }
-
     private async Task RunLoopAsync(CancellationToken stoppingToken)
     {
         var session = await _sessionStore.LoadAsync(stoppingToken);
@@ -158,26 +134,14 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 }
 
                 using var source = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                var cancelTask = CancelAgentAsync(source);
                 var stopwatch = Stopwatch.StartNew();
                 try
                 {
                     List<ChatMessage> messages = [new ChatMessage(ChatRole.User, input)];
-                    while (messages.Count > 0)
-                    {
-                        var agentResponse = await _agentRunner.ExecuteAsync(messages, session, source.Token);
-                        messages = agentResponse
-                            .Messages.SelectMany(m => m.Contents)
-                            .OfType<ToolApprovalRequestContent>()
-                            .Select(request =>
-                            {
-                                var toolCall = (FunctionCallContent)request.ToolCall;
-                                System.Console.WriteLine($"Approve {toolCall.Name}? (Y/N)");
-                                bool approved = System.Console.ReadLine()?.Equals("Y", StringComparison.OrdinalIgnoreCase) ?? false;
-                                return new ChatMessage(ChatRole.User, [request.CreateResponse(approved)]);
-                            })
-                            .ToList();
-                    }
+                    var executeTask = _agentRunner.ExecuteAsync(messages, session, source.Token);
+                    var cancelTask = CancelAgentAsync(source);
+                    var mainTask = Task.WhenAny(executeTask, cancelTask);
+                    await AnsiConsole.Status().StartAsync("执行中（按 Esc 取消）", _ => mainTask);
                     MarkSessionDirty();
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)
@@ -187,7 +151,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 finally
                 {
                     source.Cancel();
-                    await cancelTask;
                 }
                 stopwatch.Stop();
                 _logger.LogInformation("Agent response completed in {ElapsedMs} ms.", stopwatch.ElapsedMilliseconds);
@@ -199,7 +162,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             finally
             {
                 await SafeSaveAsync(session, stoppingToken, force: false);
-                System.Console.ResetColor();
             }
         }
     }
@@ -228,14 +190,39 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
 
     private void LogConfig()
     {
-        StringBuilder builder = new StringBuilder();
-        builder.AppendLine($"Provider:{_chatClientOptions.Value.Provider}");
+        Table table = new Table();
+        table.AddColumn("配置项");
+        table.AddColumn("值");
+        table.AddRow(new Text("Provider"), new Text(_chatClientOptions.Value.Provider ?? string.Empty));
         if (!string.IsNullOrWhiteSpace(_chatClientOptions.Value.BaseUrl))
         {
-            builder.AppendLine($"BaseUrl:{_chatClientOptions.Value.BaseUrl}");
+            table.AddRow(new Text("BaseUrl"), new Text(_chatClientOptions.Value.BaseUrl));
         }
-        builder.AppendLine($"ModelId:{_chatClientOptions.Value.ModelId}");
-        builder.AppendLine($"Working:{_workingOptions.Value.BasePath}");
-        _outputCapture.WriteSystemMessage(builder.ToString());
+        table.AddRow(new Text("ModelId"), new Text(_chatClientOptions.Value.ModelId ?? string.Empty));
+        table.AddRow(new Text("Working"), new Text(_workingOptions.Value.BasePath));
+        AnsiConsole.Write(table);
+    }
+
+    private static async Task CancelAgentAsync(CancellationTokenSource source)
+    {
+        while (!source.IsCancellationRequested)
+        {
+            try
+            {
+                if (System.Console.KeyAvailable)
+                {
+                    var key = System.Console.ReadKey(intercept: true);
+                    if (key.Key == ConsoleKey.Escape)
+                    {
+                        source.Cancel();
+                    }
+                }
+                await Task.Delay(50, source.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
     }
 }
