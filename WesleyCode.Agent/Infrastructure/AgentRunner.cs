@@ -46,7 +46,7 @@ internal class AgentRunner : IAgentRunner
         string currentContent = string.Empty;
         StringBuilder currentBuilder = new();
         List<AgentResponseUpdate> agentResponses = new();
-        IAsyncEnumerator<AgentResponseUpdate> enumerator = _agent
+        await using IAsyncEnumerator<AgentResponseUpdate> enumerator = _agent
             .RunStreamingAsync(input, session, cancellationToken: cancellationToken)
             .GetAsyncEnumerator(cancellationToken);
         while (currentMove)

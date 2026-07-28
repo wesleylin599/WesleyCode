@@ -42,43 +42,36 @@ public class ContinueErrorChatClient : DelegatingChatClient
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
-        IAsyncEnumerator<ChatResponseUpdate> enumerator = base.GetStreamingResponseAsync(messages, options, cancellationToken)
+        await using IAsyncEnumerator<ChatResponseUpdate> enumerator = base.GetStreamingResponseAsync(messages, options, cancellationToken)
             .GetAsyncEnumerator(cancellationToken);
-        try
+        ChatResponseUpdate update;
+        while (true)
         {
-            ChatResponseUpdate update;
-            while (true)
+            try
             {
-                try
+                if (!await enumerator.MoveNextAsync())
                 {
-                    if (!await enumerator.MoveNextAsync())
-                    {
-                        break;
-                    }
-
-                    update = enumerator.Current;
-                }
-                catch (Exception ex)
-                {
-                    update = new ChatResponseUpdate(
-                        ChatRole.Assistant,
-                        [
-                            new ErrorContent($"发生一个错误: {ex.Message}")
-                            {
-                                RawRepresentation = ex,
-                                Details = ex.StackTrace,
-                                ErrorCode = ex.HResult.ToString(),
-                            },
-                        ]
-                    );
+                    break;
                 }
 
-                yield return update;
+                update = enumerator.Current;
             }
-        }
-        finally
-        {
-            await enumerator.DisposeAsync();
+            catch (Exception ex)
+            {
+                update = new ChatResponseUpdate(
+                    ChatRole.Assistant,
+                    [
+                        new ErrorContent($"发生一个错误: {ex.Message}")
+                        {
+                            RawRepresentation = ex,
+                            Details = ex.StackTrace,
+                            ErrorCode = ex.HResult.ToString(),
+                        },
+                    ]
+                );
+            }
+
+            yield return update;
         }
     }
 }

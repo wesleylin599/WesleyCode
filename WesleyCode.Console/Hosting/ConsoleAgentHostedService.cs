@@ -18,9 +18,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private readonly IOptions<ChatClientOptions> _chatClientOptions;
     private readonly ILogger<ConsoleAgentHostedService> _logger;
 
-    private DateTimeOffset _lastSavedAt;
-    private bool _sessionDirty;
-
     public ConsoleAgentHostedService(
         IAgentRunner agentRunner,
         ISessionStore sessionStore,
@@ -59,8 +56,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 await startedTcs.Task.WaitAsync(stoppingToken);
             }
 
-            _lastSavedAt = DateTimeOffset.UtcNow;
-            _sessionDirty = false;
             await RunLoopAsync(stoppingToken);
         }
         catch (Exception ex)
@@ -73,18 +68,11 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         }
     }
 
-    private async Task SafeSaveAsync(AgentSession session, CancellationToken cancellationToken, bool force)
+    private async Task SafeSaveAsync(AgentSession session, CancellationToken cancellationToken)
     {
-        if (!force && !ShouldSaveSession())
-        {
-            return;
-        }
-
         try
         {
             await _sessionStore.SaveAsync(session, cancellationToken);
-            _lastSavedAt = DateTimeOffset.UtcNow;
-            _sessionDirty = false;
         }
         catch (Exception ex)
         {
@@ -123,9 +111,8 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                 {
                     System.Console.Clear();
                     await _sessionStore.ClearAsync(stoppingToken);
-                    MarkSessionDirty();
-                    LogConfig();
                     session = await _agentRunner.CreateSessionAsync(stoppingToken);
+                    LogConfig();
                     continue;
                 }
 
@@ -137,11 +124,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     var cancelTask = CancelAgentAsync(source);
                     var mainTask = Task.WhenAny(executeTask, cancelTask);
                     await AnsiConsole.Status().StartAsync("执行中（按 Esc 取消）", _ => mainTask);
-                    MarkSessionDirty();
-                }
-                catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested && source.IsCancellationRequested)
-                {
-                    _outputCapture.WriteSystemMessage("已取消当前代理执行。");
                 }
                 finally
                 {
@@ -154,31 +136,9 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             }
             finally
             {
-                await SafeSaveAsync(session, stoppingToken, force: false);
+                await SafeSaveAsync(session, stoppingToken);
             }
         }
-    }
-
-    private bool ShouldSaveSession()
-    {
-        if (!_sessionDirty)
-        {
-            return false;
-        }
-
-        var debounceSeconds = _sessionOptions.Value.SaveDebounceSeconds;
-        if (debounceSeconds <= 0)
-        {
-            return true;
-        }
-
-        var elapsed = DateTimeOffset.UtcNow - _lastSavedAt;
-        return elapsed.TotalSeconds >= debounceSeconds;
-    }
-
-    private void MarkSessionDirty()
-    {
-        _sessionDirty = true;
     }
 
     private void LogConfig()

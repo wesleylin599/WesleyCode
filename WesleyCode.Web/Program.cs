@@ -27,13 +27,21 @@ app.UseStaticFiles();
 app.MapStaticAssets();
 app.MapGet(
     "/workspace/archive",
-    (IOptions<WorkingOptions> workingOptions) =>
+    async (IOptions<WorkingOptions> workingOptions, HttpResponse response) =>
     {
         var workspacePath = Path.GetFullPath(workingOptions.Value.BasePath);
-        if (Directory.Exists(workspacePath))
+        if (!Directory.Exists(workspacePath))
         {
-            using var stream = new MemoryStream();
-            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+            return Results.NotFound();
+        }
+
+        var fileName = $"workspace-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.zip";
+        response.Headers.ContentType = "application/zip";
+        response.Headers.ContentDisposition = $"attachment; filename=\"{fileName}\"";
+
+        await using (var archiveStream = new MemoryStream())
+        {
+            await using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create, leaveOpen: true))
             {
                 foreach (var filePath in Directory.EnumerateFiles(workspacePath, "*", SearchOption.AllDirectories))
                 {
@@ -42,9 +50,10 @@ app.MapGet(
                 }
             }
 
-            return Results.File(stream.ToArray(), "application/zip", $"workspace-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.zip");
+            // Reset to beginning and stream directly to response
+            archiveStream.Position = 0;
+            await archiveStream.CopyToAsync(response.Body);
         }
-        return Results.NotFound();
     }
 );
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
