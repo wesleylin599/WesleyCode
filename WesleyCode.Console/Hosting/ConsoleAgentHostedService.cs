@@ -193,12 +193,18 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         Table table = new Table();
         table.AddColumn("配置项");
         table.AddColumn("值");
-        table.AddRow(new Text("Provider"), new Text(_chatClientOptions.Value.Provider ?? string.Empty));
+        if (!string.IsNullOrWhiteSpace(_chatClientOptions.Value.Provider))
+        {
+            table.AddRow(new Text("Provider"), new Text(_chatClientOptions.Value.Provider));
+        }
         if (!string.IsNullOrWhiteSpace(_chatClientOptions.Value.BaseUrl))
         {
             table.AddRow(new Text("BaseUrl"), new Text(_chatClientOptions.Value.BaseUrl));
         }
-        table.AddRow(new Text("ModelId"), new Text(_chatClientOptions.Value.ModelId ?? string.Empty));
+        if (!string.IsNullOrWhiteSpace(_chatClientOptions.Value.ModelId))
+        {
+            table.AddRow(new Text("ModelId"), new Text(_chatClientOptions.Value.ModelId));
+        }
         table.AddRow(new Text("Working"), new Text(_workingOptions.Value.BasePath));
         AnsiConsole.Write(table);
     }
