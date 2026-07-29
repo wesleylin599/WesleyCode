@@ -14,7 +14,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private readonly IOutputCapture _outputCapture;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly IOptions<WorkingOptions> _workingOptions;
-    private readonly IOptions<SessionOptions> _sessionOptions;
     private readonly IOptions<ChatClientOptions> _chatClientOptions;
     private readonly ILogger<ConsoleAgentHostedService> _logger;
 
@@ -24,7 +23,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         IOutputCapture outputCapture,
         IHostApplicationLifetime lifetime,
         IOptions<WorkingOptions> workingOptions,
-        IOptions<SessionOptions> sessionOptions,
         IOptions<ChatClientOptions> chatClientOptions,
         ILogger<ConsoleAgentHostedService> logger
     )
@@ -34,7 +32,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         this._outputCapture = outputCapture;
         this._lifetime = lifetime;
         this._workingOptions = workingOptions;
-        this._sessionOptions = sessionOptions;
         this._chatClientOptions = chatClientOptions;
         this._logger = logger;
     }

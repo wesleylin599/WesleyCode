@@ -444,6 +444,7 @@ summary:focus-visible {
     max-width: 64rem;
     min-height: calc(100vh - clamp(3rem, 6vw, 6.5rem));
     margin: 0 auto;
+    padding-bottom: 11rem;
 }
 
 .chat-header {
@@ -798,9 +799,14 @@ summary:focus-visible {
 }
 
 .composer-shell {
-    position: sticky;
+    position: fixed;
+    right: clamp(1.5rem, 3vw, 3.25rem);
     bottom: 0;
+    left: calc(var(--sidebar-width, 350px) + clamp(1.5rem, 3vw, 3.25rem));
     z-index: 5;
+    width: auto;
+    max-width: 64rem;
+    margin-inline: auto;
     padding: 1.4rem 0 0.75rem;
 }
 
@@ -1003,6 +1009,11 @@ summary:focus-visible {
     .chat-page {
         min-height: calc(100vh - 10rem);
     }
+
+    .composer-shell {
+        right: 1.35rem;
+        left: 1.35rem;
+    }
 }
 
 @media (max-width: 620px) {
@@ -1044,6 +1055,7 @@ summary:focus-visible {
     .chat-page {
         gap: 1.3rem;
         min-height: calc(100vh - 5.25rem);
+        padding-bottom: 13.5rem;
     }
 
     .chat-header {
@@ -1094,6 +1106,8 @@ summary:focus-visible {
     }
 
     .composer-shell {
+        right: 0.8rem;
+        left: 0.8rem;
         padding-top: 1rem;
     }
 

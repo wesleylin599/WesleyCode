@@ -1,8 +1,8 @@
-﻿const handlers = new Map(); // elementId → handler
-const scrollStates = new Map(); // elementId → state
+﻿const handlers = new WeakMap();
+const autoScrollStates = new WeakMap();
 
 export function registerSubmitOnEnter(element, dotNetHelper) {
-    if (!element?.id) {
+    if (!element) {
         return;
     }
 
@@ -15,86 +15,61 @@ export function registerSubmitOnEnter(element, dotNetHelper) {
         await dotNetHelper.invokeMethodAsync('SubmitFromKeyboardAsync');
     };
 
-    handlers.set(element.id, handler);
+    handlers.set(element, handler);
     element.addEventListener('keydown', handler);
 }
 
 export function disposeSubmitOnEnter(element) {
-    const id = element?.id;
-    if (!id) return;
-
-    const handler = handlers.get(id);
-    if (handler) {
-        element.removeEventListener('keydown', handler);
-        handlers.delete(id);
-    }
-}
-
-export function registerAutoScroll(anchor, composerShell) {
-    if (!anchor?.id) {
+    const handler = handlers.get(element);
+    if (!handler) {
         return;
     }
 
-    const existingState = scrollStates.get(anchor.id);
-    if (existingState) {
-        disposeScrollState(existingState);
+    element.removeEventListener('keydown', handler);
+    handlers.delete(element);
+}
+
+export function registerAutoScroll(anchor, composerShell) {
+    if (!anchor) {
+        return;
     }
 
     const state = {
-        anchor,
         composerShell,
         shouldStick: true,
-        pendingFrame: null,
         update: () => {
-            state.shouldStick = isNearBottom(state.anchor, state.composerShell);
+            state.shouldStick = isNearBottom(anchor, state.composerShell);
         }
     };
-
-    state.observer = new MutationObserver(() => {
-        if (!state.shouldStick || state.pendingFrame !== null) {
-            return;
-        }
-
-        state.pendingFrame = requestAnimationFrame(() => {
-            state.pendingFrame = null;
-            scrollViewportToTarget(state.anchor, state.composerShell, 'auto');
-            state.update();
-        });
-    });
 
     state.update();
     window.addEventListener('scroll', state.update, { passive: true });
     window.addEventListener('resize', state.update);
-    state.observer.observe(anchor.parentElement, { childList: true, subtree: true, characterData: true });
-    scrollStates.set(anchor.id, state);
+    autoScrollStates.set(anchor, state);
 }
 
 export function disposeAutoScroll(anchor) {
-    const id = anchor?.id;
-    if (!id) return;
-
-    const state = scrollStates.get(id);
-    if (state) {
-        disposeScrollState(state);
-        scrollStates.delete(id);
-    }
-}
-
-export function scrollToBottom(anchor, composerShell, force = false) {
-    if (!anchor?.id) {
+    const state = autoScrollStates.get(anchor);
+    if (!state) {
         return;
     }
 
-    const state = scrollStates.get(anchor.id);
+    window.removeEventListener('scroll', state.update);
+    window.removeEventListener('resize', state.update);
+    autoScrollStates.delete(anchor);
+}
+
+export function scrollToBottom(anchor, composerShell, force = false) {
+    if (!anchor) {
+        return;
+    }
+
+    const state = autoScrollStates.get(anchor);
     if (state) {
-        state.anchor = anchor;
         state.composerShell = composerShell;
         if (!force && !state.shouldStick) {
             return;
         }
-    } else {
-        // state is null/undefined → fallback: always scroll
-        force = true;
     }
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -137,14 +112,4 @@ function scrollViewportToTarget(anchor, composerShell, behavior) {
 
 function getScrollTop() {
     return document.scrollingElement?.scrollTop ?? window.scrollY ?? 0;
-}
-
-function disposeScrollState(state) {
-    window.removeEventListener('scroll', state.update);
-    window.removeEventListener('resize', state.update);
-    state.observer.disconnect();
-
-    if (state.pendingFrame !== null) {
-        cancelAnimationFrame(state.pendingFrame);
-    }
 }

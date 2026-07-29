@@ -121,14 +121,15 @@
             </article>
         }
 
-        <div class="chat-bottom-anchor" @ref="_bottomAnchor"></div>
+        <div class="chat-bottom-anchor" id="scroll-bottom-anchor" @ref="_bottomAnchor"></div>
     </section>
 
-    <div class="composer-shell" @ref="_composerShell">
+    <div class="composer-shell" id="scroll-composer-anchor" @ref="_composerShell">
         <div class="composer-hint"><span aria-hidden="true">⌘</span> Enter 发送 · Shift + Enter 换行</div>
         <div class="composer-panel">
             <textarea
                 @ref="_composer"
+                id="chat-input"
                 class="composer-input"
                 placeholder="给 WesleyCode 下达任务，例如：为当前仓库添加一个可用的登录页。"
                 @bind="_input"
@@ -171,7 +172,7 @@
     {
         if (firstRender)
         {
-            _module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/chatComposer.js");
+            _module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", $"./{Assets["js/chatComposer.js"]}");
             _selfReference = DotNetObjectReference.Create(this);
             await _module.InvokeVoidAsync("registerSubmitOnEnter", _composer, _selfReference);
             await _module.InvokeVoidAsync("registerAutoScroll", _bottomAnchor, _composerShell);
@@ -186,7 +187,7 @@
         {
             _lastRenderMessageCount = Workspace.Messages.Count;
             _lastBusyState = Workspace.IsBusy;
-            await _module.InvokeVoidAsync("scrollToBottom", _bottomAnchor, _composerShell, firstRender);
+            await _module.InvokeVoidAsync("scrollToBottom", _bottomAnchor, _composerShell, true);
         }
     }
 
