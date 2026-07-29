@@ -43,7 +43,6 @@ internal class AgentRunner : IAgentRunner
     public async Task<AgentResponse> ExecuteAsync(List<ChatMessage> input, AgentSession session, CancellationToken cancellationToken = default)
     {
         bool currentMove = true;
-        string currentContent = string.Empty;
         StringBuilder currentBuilder = new();
         List<AgentResponseUpdate> agentResponses = new();
         await using IAsyncEnumerator<AgentResponseUpdate> enumerator = _agent
@@ -59,17 +58,16 @@ internal class AgentRunner : IAgentRunner
             };
             foreach (var content in responseUpdate.Contents)
             {
-                if (currentContent != content.GetType().Name && currentBuilder.Length > 0)
-                {
-                    _capture.WriteAgentMessage(currentBuilder.ToString());
-                    currentBuilder.Clear();
-                }
                 if (content is TextContent textContent)
                 {
                     currentBuilder.Append(textContent.Text);
                 }
+                else if (currentBuilder.Length > 0)
+                {
+                    _capture.WriteAgentMessage(currentBuilder.ToString());
+                    currentBuilder.Clear();
+                }
                 _capture.CommonWriteMessage(responseUpdate.AuthorName, content);
-                currentContent = content.GetType().Name;
             }
             agentResponses.Add(responseUpdate);
         }
