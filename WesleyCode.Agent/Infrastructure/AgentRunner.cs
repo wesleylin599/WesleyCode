@@ -17,17 +17,10 @@ internal class AgentRunner : IAgentRunner
     public AgentRunner(IChatClient client, IOutputCapture capture, IEnumerable<AIContextProvider> providers, IOptions<AgentOptions> options)
     {
         this._agent = client
-            .AsAIAgent(
-                options: new ChatClientAgentOptions
-                {
-                    Name = options.Value.Name,
-                    Description = options.Value.Description,
-                    ChatOptions = new ChatOptions { Instructions = options.Value.Instructions },
-                    AIContextProviders = providers,
-                }
-            )
+            .AsAIAgent(BuildChatClientAgentOptions(options, providers))
             .AsBuilder()
-            .UseToolApproval(new ToolApprovalAgentOptions() { AutoApprovalRules = [context => ValueTask.FromResult(true)] })
+            .UseToolApproval(BuildToolApprovalAgentOptions())
+            .Use(BuildLoopAgent)
             .Build();
         this._capture = capture;
     }
@@ -109,5 +102,42 @@ internal class AgentRunner : IAgentRunner
         return Task.CompletedTask;
     }
 
-    private class StopContent : AIContent { }
+    private static ChatClientAgentOptions BuildChatClientAgentOptions(IOptions<AgentOptions> options, IEnumerable<AIContextProvider> providers) =>
+        new ChatClientAgentOptions
+        {
+            Name = options.Value.Name,
+            Description = options.Value.Description,
+            ChatOptions = new ChatOptions { Instructions = options.Value.Instructions },
+            AIContextProviders = providers,
+        };
+
+    private static ToolApprovalAgentOptions BuildToolApprovalAgentOptions() =>
+        new ToolApprovalAgentOptions() { AutoApprovalRules = [context => ValueTask.FromResult(true)] };
+
+    private static LoopAgent BuildLoopAgent(AIAgent innerAgent) =>
+        new LoopAgent(
+            innerAgent,
+            [new NonEmptyLoopEvaluator()],
+            new LoopAgentOptions { OnBehalfOfAuthorName = "loop", ExcludeOnBehalfOfMessages = true }
+        );
+
+    private sealed class StopContent() : AIContent;
+
+    private sealed class NonEmptyLoopEvaluator : LoopEvaluator
+    {
+        public override ValueTask<LoopEvaluation> EvaluateAsync(LoopContext context, CancellationToken cancellationToken = default)
+        {
+            if (context.LastResponse.Messages.LastOrDefault()?.Contents.LastOrDefault() is not TextContent textConten)
+            {
+                return new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("继续处理请求,完成任务后回复文本消息。"));
+            }
+
+            if (string.IsNullOrEmpty(textConten.Text))
+            {
+                return new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("继续处理请求,完成任务后回复文本消息不能为空。"));
+            }
+
+            return new ValueTask<LoopEvaluation>(LoopEvaluation.Stop());
+        }
+    }
 }
