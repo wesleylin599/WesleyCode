@@ -20,9 +20,7 @@ public class ContinueErrorChatClient : DelegatingChatClient
         }
         catch (Exception ex)
         {
-            return new ChatResponse(
-                new ChatMessage(ChatRole.Assistant, [new ErrorContent($"发生一个错误: {ex.Message}") { RawRepresentation = ex }])
-            );
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, [new ErrorContent($"发生一个错误: {ex.Message}")]));
         }
     }
 
@@ -48,7 +46,7 @@ public class ContinueErrorChatClient : DelegatingChatClient
             }
             catch (Exception ex)
             {
-                contents = [new ErrorContent($"发生一个错误: {ex.Message}") { RawRepresentation = ex }];
+                contents = [new ErrorContent($"发生一个错误: {ex.Message}")];
             }
 
             yield return new ChatResponseUpdate(ChatRole.Assistant, contents);

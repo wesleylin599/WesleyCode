@@ -114,7 +114,8 @@ internal class AgentRunner : IAgentRunner
     private static ToolApprovalAgentOptions BuildToolApprovalAgentOptions() =>
         new ToolApprovalAgentOptions() { AutoApprovalRules = [context => ValueTask.FromResult(true)] };
 
-    private static LoopAgent BuildLoopAgent(AIAgent innerAgent) => new LoopAgent(innerAgent, [new NonEmptyLoopEvaluator()]);
+    private static LoopAgent BuildLoopAgent(AIAgent innerAgent) =>
+        new LoopAgent(innerAgent, new NonEmptyLoopEvaluator(), new LoopAgentOptions { MaxIterations = 2, OnBehalfOfAuthorName = "loop" });
 
     private sealed class NonEmptyLoopEvaluator : LoopEvaluator
     {
@@ -128,7 +129,7 @@ internal class AgentRunner : IAgentRunner
                 return new ValueTask<LoopEvaluation>(ContinueWithAssistant("继续处理请求,消息不能为空。"));
             }
 
-            if (message.Contents.LastOrDefault() is not TextContent textConten)
+            if (message.Contents.OfType<TextContent>().LastOrDefault() is not TextContent textConten)
             {
                 return new ValueTask<LoopEvaluation>(ContinueWithAssistant("继续处理请求,完成任务后回复文本消息。"));
             }

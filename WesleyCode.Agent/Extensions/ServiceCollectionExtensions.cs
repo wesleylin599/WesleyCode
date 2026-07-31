@@ -23,7 +23,11 @@ public static class ServiceCollectionExtensions
 
     public static void CommonWriteMessage(this IOutputCapture capture, string? author, AIContent content)
     {
-        if (content is FunctionCallContent callContent)
+        if (content is ErrorContent errorContent)
+        {
+            capture.WriteSystemMessage(errorContent.Message);
+        }
+        else if (content is FunctionCallContent callContent)
         {
             capture.WriteToolCall(callContent.CallId, author, callContent.Name, callContent.Arguments);
         }
