@@ -21,17 +21,7 @@ public class ContinueErrorChatClient : DelegatingChatClient
         catch (Exception ex)
         {
             return new ChatResponse(
-                new ChatMessage(
-                    ChatRole.Assistant,
-                    [
-                        new ErrorContent($"发生一个错误: {ex.Message}")
-                        {
-                            RawRepresentation = ex,
-                            Details = ex.StackTrace,
-                            ErrorCode = ex.HResult.ToString(),
-                        },
-                    ]
-                )
+                new ChatMessage(ChatRole.Assistant, [new ErrorContent($"发生一个错误: {ex.Message}") { RawRepresentation = ex }])
             );
         }
     }
@@ -44,7 +34,7 @@ public class ContinueErrorChatClient : DelegatingChatClient
     {
         await using IAsyncEnumerator<ChatResponseUpdate> enumerator = base.GetStreamingResponseAsync(messages, options, cancellationToken)
             .GetAsyncEnumerator(cancellationToken);
-        ChatResponseUpdate update;
+        IList<AIContent> contents = [];
         while (true)
         {
             try
@@ -54,24 +44,14 @@ public class ContinueErrorChatClient : DelegatingChatClient
                     break;
                 }
 
-                update = enumerator.Current;
+                contents = enumerator.Current.Contents;
             }
             catch (Exception ex)
             {
-                update = new ChatResponseUpdate(
-                    ChatRole.Assistant,
-                    [
-                        new ErrorContent($"发生一个错误: {ex.Message}")
-                        {
-                            RawRepresentation = ex,
-                            Details = ex.StackTrace,
-                            ErrorCode = ex.HResult.ToString(),
-                        },
-                    ]
-                );
+                contents = [new ErrorContent($"发生一个错误: {ex.Message}") { RawRepresentation = ex }];
             }
 
-            yield return update;
+            yield return new ChatResponseUpdate(ChatRole.Assistant, contents);
         }
     }
 }

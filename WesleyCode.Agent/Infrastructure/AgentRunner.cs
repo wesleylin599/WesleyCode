@@ -114,30 +114,33 @@ internal class AgentRunner : IAgentRunner
     private static ToolApprovalAgentOptions BuildToolApprovalAgentOptions() =>
         new ToolApprovalAgentOptions() { AutoApprovalRules = [context => ValueTask.FromResult(true)] };
 
-    private static LoopAgent BuildLoopAgent(AIAgent innerAgent) =>
-        new LoopAgent(
-            innerAgent,
-            [new NonEmptyLoopEvaluator()],
-            new LoopAgentOptions { OnBehalfOfAuthorName = "loop", ExcludeOnBehalfOfMessages = true }
-        );
-
-    private sealed class StopContent() : AIContent;
+    private static LoopAgent BuildLoopAgent(AIAgent innerAgent) => new LoopAgent(innerAgent, [new NonEmptyLoopEvaluator()]);
 
     private sealed class NonEmptyLoopEvaluator : LoopEvaluator
     {
+        private static LoopEvaluation ContinueWithAssistant(string feedback) =>
+            LoopEvaluation.ContinueWithMessages([new(ChatRole.Assistant, feedback)]);
+
         public override ValueTask<LoopEvaluation> EvaluateAsync(LoopContext context, CancellationToken cancellationToken = default)
         {
-            if (context.LastResponse.Messages.LastOrDefault()?.Contents.LastOrDefault() is not TextContent textConten)
+            if (context.LastResponse.Messages.LastOrDefault() is not { } message)
             {
-                return new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("继续处理请求,完成任务后回复文本消息。"));
+                return new ValueTask<LoopEvaluation>(ContinueWithAssistant("继续处理请求,消息不能为空。"));
+            }
+
+            if (message.Contents.LastOrDefault() is not TextContent textConten)
+            {
+                return new ValueTask<LoopEvaluation>(ContinueWithAssistant("继续处理请求,完成任务后回复文本消息。"));
             }
 
             if (string.IsNullOrEmpty(textConten.Text))
             {
-                return new ValueTask<LoopEvaluation>(LoopEvaluation.Continue("继续处理请求,完成任务后回复文本消息不能为空。"));
+                return new ValueTask<LoopEvaluation>(ContinueWithAssistant("继续处理请求,完成任务后回复文本消息不能为空。"));
             }
 
             return new ValueTask<LoopEvaluation>(LoopEvaluation.Stop());
         }
     }
+
+    private sealed class StopContent() : AIContent;
 }
