@@ -46,7 +46,7 @@ internal class AgentRunner : IAgentRunner
             currentMove = await enumerator.MoveNextAsync();
             AgentResponseUpdate responseUpdate = currentMove switch
             {
-                false => new(ChatRole.Assistant, [new StopContent()]),
+                false => new(ChatRole.Assistant, [new ContinueContent()]),
                 true => enumerator.Current,
             };
             foreach (var content in responseUpdate.Contents)
@@ -119,7 +119,7 @@ internal class AgentRunner : IAgentRunner
     private sealed class NonEmptyLoopEvaluator : LoopEvaluator
     {
         private static LoopEvaluation ContinueWithAssistant(string feedback) =>
-            LoopEvaluation.ContinueWithMessages([new(ChatRole.Assistant, feedback)]);
+            LoopEvaluation.ContinueWithMessages([new(ChatRole.Assistant, [new TextContent(feedback), new ContinueContent()])]);
 
         public override ValueTask<LoopEvaluation> EvaluateAsync(LoopContext context, CancellationToken cancellationToken = default)
         {
@@ -137,5 +137,5 @@ internal class AgentRunner : IAgentRunner
         }
     }
 
-    private sealed class StopContent() : AIContent;
+    private sealed class ContinueContent() : AIContent;
 }
