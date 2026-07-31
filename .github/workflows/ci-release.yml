@@ -1,0 +1,101 @@
+name: CI and Release
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: 10.0.x
+  CONFIGURATION: Release
+
+jobs:
+  build:
+    name: Build and publish (${{ matrix.runtime }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime:
+          - linux-x64
+          - win-x64
+          - osx-x64
+          - osx-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore WesleyCode.slnx --runtime ${{ matrix.runtime }}
+
+      - name: Build
+        run: dotnet build WesleyCode.slnx --configuration ${{ env.CONFIGURATION }} --no-restore --no-incremental
+
+      - name: Publish Console
+        run: >-
+          dotnet publish WesleyCode.Console/WesleyCode.Console.csproj
+          --configuration ${{ env.CONFIGURATION }}
+          --runtime ${{ matrix.runtime }}
+          --self-contained true
+          --no-restore
+          --output artifacts/${{ matrix.runtime }}/WesleyCode.Console
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+
+      - name: Package releases
+        shell: bash
+        run: |
+          mkdir -p packages
+          if [[ "${{ matrix.runtime }}" == "win-*" ]]; then
+            zip -r packages/WesleyCode-Console-${{ matrix.runtime }}.zip artifacts/${{ matrix.runtime }}/WesleyCode.Console
+          else
+            tar -czf packages/WesleyCode-Console-${{ matrix.runtime }}.tar.gz -C artifacts/${{ matrix.runtime }} WesleyCode.Console
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WesleyCode-${{ matrix.runtime }}
+          path: packages/*
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: WesleyCode-*
+          path: packages
+          merge-multiple: true
+
+      - name: Upload GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: packages/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

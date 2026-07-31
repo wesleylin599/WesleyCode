@@ -4,6 +4,7 @@
         <File Path=".gitattributes" />
         <File Path=".gitignore" />
         <File Path="README.md" />
+        <File Path=".github/workflows/ci-release.yml" />
     </Folder>
     <Project Path="WesleyCode.Agent\WesleyCode.Agent.csproj" />
     <Project Path="WesleyCode.Console\WesleyCode.Console.csproj" />

@@ -191,6 +191,17 @@ dotnet restore
 dotnet build WesleyCode.slnx
 ```
 
+## GitHub 自动发布
+
+推送符合 `v*` 格式的标签后，GitHub Actions 会自动构建并创建 GitHub Release，上传 Console 的 Windows x64、Linux x64、macOS Intel 和 macOS Apple Silicon 单文件自包含发布包：
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+发布包启用单文件和自包含部署，运行时不需要安装 .NET Runtime。Web 项目不参与 Release 发布。普通推送到 `master` 或提交 Pull Request 时只执行构建验证，不会创建 Release。
+
 ## 启动方式
 
 ### 启动控制台版
