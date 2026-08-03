@@ -38,6 +38,12 @@ public static class ServiceCollectionExtensions
         }
     }
 
+    public static AIAgentBuilder UseOutput(this AIAgentBuilder builder, IOutputCapture capture) =>
+        builder.Use(innerAgent => new OutputAgent(innerAgent, capture));
+
+    public static AIAgentBuilder UseLoop(this AIAgentBuilder builder) =>
+        builder.Use(innerAgent => new LoopAgent(innerAgent, new NonEmptyLoopEvaluator()));
+
     public static IHttpClientBuilder ConfigureHttpClientAgents(this IServiceCollection services, Action<HttpClient> configureClient) =>
         services.AddHttpClient(AgentHttpClientName).ConfigureHttpClient(configureClient);
 

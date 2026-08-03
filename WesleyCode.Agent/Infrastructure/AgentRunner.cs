@@ -1,5 +1,4 @@
-﻿using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -20,7 +19,8 @@ internal class AgentRunner : IAgentRunner
             .AsAIAgent(BuildChatClientAgentOptions(options, providers))
             .AsBuilder()
             .UseToolApproval(BuildToolApprovalAgentOptions())
-            .Use(BuildLoopAgent)
+            .UseOutput(capture)
+            .UseLoop()
             .Build();
         this._capture = capture;
     }
@@ -33,39 +33,8 @@ internal class AgentRunner : IAgentRunner
     public ValueTask<AgentSession> DeserializeSessionAsync(JsonElement serializedState, CancellationToken cancellationToken = default) =>
         _agent.DeserializeSessionAsync(serializedState, cancellationToken: cancellationToken);
 
-    public async Task<AgentResponse> ExecuteAsync(List<ChatMessage> input, AgentSession session, CancellationToken cancellationToken = default)
-    {
-        bool currentMove = true;
-        StringBuilder currentBuilder = new();
-        List<AgentResponseUpdate> agentResponses = new();
-        await using IAsyncEnumerator<AgentResponseUpdate> enumerator = _agent
-            .RunStreamingAsync(input, session, cancellationToken: cancellationToken)
-            .GetAsyncEnumerator(cancellationToken);
-        while (currentMove)
-        {
-            currentMove = await enumerator.MoveNextAsync();
-            AgentResponseUpdate responseUpdate = currentMove switch
-            {
-                false => new(ChatRole.Assistant, [new ContinueContent()]),
-                true => enumerator.Current,
-            };
-            foreach (var content in responseUpdate.Contents)
-            {
-                if (content is TextContent textContent)
-                {
-                    currentBuilder.Append(textContent.Text);
-                }
-                else if (currentBuilder.Length > 0)
-                {
-                    _capture.WriteAgentMessage(currentBuilder.ToString());
-                    currentBuilder.Clear();
-                }
-                _capture.CommonWriteMessage(responseUpdate.AuthorName, content);
-            }
-            agentResponses.Add(responseUpdate);
-        }
-        return agentResponses.ToAgentResponse();
-    }
+    public Task<AgentResponse> ExecuteAsync(List<ChatMessage> input, AgentSession session, CancellationToken cancellationToken = default) =>
+        _agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken).ToAgentResponseAsync(cancellationToken);
 
     public Task RestartSessionAsync(AgentSession activeSession, CancellationToken cancellationToken = default)
     {
@@ -113,29 +82,4 @@ internal class AgentRunner : IAgentRunner
 
     private static ToolApprovalAgentOptions BuildToolApprovalAgentOptions() =>
         new ToolApprovalAgentOptions() { AutoApprovalRules = [context => ValueTask.FromResult(true)] };
-
-    private static LoopAgent BuildLoopAgent(AIAgent innerAgent) => new LoopAgent(innerAgent, new NonEmptyLoopEvaluator());
-
-    private sealed class NonEmptyLoopEvaluator : LoopEvaluator
-    {
-        private static LoopEvaluation ContinueWithAssistant(string feedback) =>
-            LoopEvaluation.ContinueWithMessages([new(ChatRole.Assistant, [new TextContent(feedback), new ContinueContent()])]);
-
-        public override ValueTask<LoopEvaluation> EvaluateAsync(LoopContext context, CancellationToken cancellationToken = default)
-        {
-            if (context.LastResponse.Messages.LastOrDefault() is not { } message)
-            {
-                return new ValueTask<LoopEvaluation>(ContinueWithAssistant("继续处理请求,消息不能为空。"));
-            }
-
-            if (message.Contents.OfType<TextContent>().LastOrDefault() is TextContent textConten && string.IsNullOrEmpty(textConten.Text))
-            {
-                return new ValueTask<LoopEvaluation>(ContinueWithAssistant("继续处理请求,完成任务后回复文本消息不能为空。"));
-            }
-
-            return new ValueTask<LoopEvaluation>(LoopEvaluation.Stop());
-        }
-    }
-
-    private sealed class ContinueContent() : AIContent;
 }
