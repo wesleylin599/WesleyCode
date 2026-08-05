@@ -4,12 +4,15 @@ using CliWrap;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Options;
 
 namespace WesleyCode.Agent.Services;
 
 internal sealed class CommandProvider : AIContextProvider
 {
+    private static readonly string FileName = OperatingSystem.IsWindows() ? "powershell" : "bin/bash";
+
     private readonly IOptions<WorkingOptions> _options;
 
     public CommandProvider(IOptions<WorkingOptions> options)
@@ -24,7 +27,7 @@ internal sealed class CommandProvider : AIContextProvider
             {
                 Instructions = $"""
                 ## Command
-                当前使用的命令行工具是`{CliWrapRunner.FileName}`
+                当前使用的命令行工具是`{FileName}`
                 命令行工具的工作目录路径是`{_options.Value.BasePath}`
                 使用`run_command`来调用命令行工具执行命令
                 """,
@@ -55,8 +58,15 @@ internal sealed class CommandProvider : AIContextProvider
             using var standardOutput = new MemoryStream();
             using var standardError = new MemoryStream();
 
-            var cli = Cli.Wrap(CliWrapRunner.FileName)
-                .WithArguments(command)
+            var cli = Cli.Wrap(FileName)
+                .WithArguments(
+                    FileName switch
+                    {
+                        "bin/bash" => ["--noprofile", "--norc", "-c", command],
+                        "powershell" => ["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", command],
+                        _ => throw new InvalidOperationException($"Unsupported shell: {FileName}"),
+                    }
+                )
                 .WithWorkingDirectory(_options.Value.BasePath)
                 .WithStandardOutputPipe(PipeTarget.ToStream(standardOutput))
                 .WithStandardErrorPipe(PipeTarget.ToStream(standardError))
@@ -64,8 +74,8 @@ internal sealed class CommandProvider : AIContextProvider
 
             var execute = await cli.ExecuteAsync(timeoutSource.Token);
             output.ExitCode = execute.ExitCode;
-            output.Output = CliWrapRunner.DecodeOutput(standardOutput);
-            output.Error = CliWrapRunner.DecodeOutput(standardError);
+            output.Output = standardOutput.DecodeOutput();
+            output.Error = standardError.DecodeOutput();
         }
         catch (Exception ex)
         {
@@ -75,7 +85,7 @@ internal sealed class CommandProvider : AIContextProvider
         return output;
     }
 
-    sealed class CommandRunResult
+    private sealed class CommandRunResult
     {
         [JsonPropertyName("exit_code")]
         public int ExitCode { get; set; }

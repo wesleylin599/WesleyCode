@@ -5,9 +5,9 @@ using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenAI;
+using UtfUnknown;
 using WesleyCode.Agent.Infrastructure;
 using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
@@ -18,6 +18,22 @@ namespace WesleyCode.Agent.Extensions;
 public static class ServiceCollectionExtensions
 {
     private const string AgentHttpClientName = "Wesley";
+
+    public static string DecodeOutput(this MemoryStream stream)
+    {
+        var bytes = stream.ToArray();
+
+        if (bytes.Length == 0)
+            return string.Empty;
+
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+        var result = CharsetDetector.DetectFromBytes(bytes);
+
+        var encoding = Encoding.GetEncoding(result.Detected?.EncodingName ?? "UTF-8");
+
+        return encoding.GetString(bytes);
+    }
 
     public static string ComputeMd5(this string target) => Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(target))).ToLowerInvariant();
 
@@ -126,8 +142,7 @@ public static class ServiceCollectionExtensions
                 trigger: CompactionTriggers.Any(CompactionTriggers.GroupsExceed(50), CompactionTriggers.TokensExceed(50000)),
                 minimumPreservedGroups: 32,
                 target: CompactionTriggers.TokensBelow(20000)
-            ),
-            loggerFactory: provider.GetRequiredService<ILoggerFactory>()
+            )
         ));
 
         // 技能执行 Provider（禁用审批）
@@ -139,7 +154,6 @@ public static class ServiceCollectionExtensions
                     options.DisableRunSkillScriptApproval = true;
                     options.DisableReadSkillResourceApproval = true;
                 })
-                .UseLoggerFactory(provider.GetRequiredService<ILoggerFactory>())
                 .UseFileScriptRunner(CliWrapRunner.RunAsync)
                 .UseFileSkill(skillsPath)
                 .DisableCaching()
@@ -150,19 +164,16 @@ public static class ServiceCollectionExtensions
     private static void RegisterAIAgent(this IServiceCollection services)
     {
         services.AddChatClient(provider =>
-        {
-            var options = provider.GetRequiredService<IOptions<ChatClientOptions>>();
-            var httpFactory = provider.GetRequiredService<IHttpClientFactory>();
-            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-
-            return ChatClientFactory
-                .Create(options.Value, httpFactory.CreateClient(AgentHttpClientName))
+            ChatClientFactory
+                .Create(
+                    provider.GetRequiredService<IOptions<ChatClientOptions>>().Value,
+                    provider.GetRequiredService<IHttpClientFactory>().CreateClient(AgentHttpClientName)
+                )
                 .AsBuilder()
-                .UseLogging(loggerFactory)
                 .UseFunctionInvocation()
                 .UseContinueError()
-                .Build();
-        });
+                .Build()
+        );
     }
 
     private static ChatClientBuilder UseContinueError(this ChatClientBuilder builder)
