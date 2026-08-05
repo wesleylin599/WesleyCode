@@ -82,6 +82,11 @@ internal static class CliWrapRunner
             return ("python", [scriptPath, .. arguments]);
         }
 
+        if (string.Equals(extension, ".ps1", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("powershell", ["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", scriptPath, .. arguments]);
+        }
+
         if (
             string.Equals(extension, ".js", StringComparison.OrdinalIgnoreCase)
             || string.Equals(extension, ".mjs", StringComparison.OrdinalIgnoreCase)
