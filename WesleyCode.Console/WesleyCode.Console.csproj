@@ -14,6 +14,7 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
         <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
+        <PackageReference Include="PrettyPrompt" Version="6.0.4" />
         <PackageReference Include="Spectre.Console" Version="0.57.2" />
     </ItemGroup>
 </Project>

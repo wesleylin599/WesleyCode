@@ -1,6 +1,8 @@
 ﻿using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using PrettyPrompt;
+using PrettyPrompt.Highlighting;
 using Spectre.Console;
 using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
@@ -16,6 +18,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     private readonly IOptions<WorkingOptions> _workingOptions;
     private readonly IOptions<ChatClientOptions> _chatClientOptions;
     private readonly ILogger<ConsoleAgentHostedService> _logger;
+    private readonly Prompt _prompt = new(configuration: new PromptConfiguration(prompt: new FormattedString("  ")));
 
     public ConsoleAgentHostedService(
         IAgentRunner agentRunner,
@@ -38,8 +41,20 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        LogConfig();
+        LogConfig(_workingOptions.Value, _chatClientOptions.Value);
         return base.StartAsync(cancellationToken);
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await base.StopAsync(cancellationToken);
+        }
+        finally
+        {
+            await _prompt.DisposeAsync();
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -87,36 +102,36 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
             {
                 await Task.Delay(100, stoppingToken);
                 _outputCapture.WriteUserTitle();
-                var input = System.Console.ReadLine();
-                if (input is null)
+                var input = await _prompt.ReadLineAsync();
+                if (!input.IsSuccess)
                 {
                     _logger.LogInformation("Standard input closed; exiting console loop.");
                     break;
                 }
 
-                if (string.IsNullOrWhiteSpace(input))
+                if (string.IsNullOrWhiteSpace(input.Text))
                 {
                     continue;
                 }
 
-                if (string.Equals(input, "/exit", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(input.Text, "/exit", StringComparison.OrdinalIgnoreCase))
                 {
                     break;
                 }
 
-                if (string.Equals(input, "/clear", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(input.Text, "/clear", StringComparison.OrdinalIgnoreCase))
                 {
                     System.Console.Clear();
                     await _sessionStore.ClearAsync(stoppingToken);
                     session = await _agentRunner.CreateSessionAsync(stoppingToken);
-                    LogConfig();
+                    LogConfig(_workingOptions.Value, _chatClientOptions.Value);
                     continue;
                 }
 
                 using var source = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                 try
                 {
-                    List<ChatMessage> messages = [new ChatMessage(ChatRole.User, input)];
+                    List<ChatMessage> messages = [new ChatMessage(ChatRole.User, input.Text)];
                     var executeTask = _agentRunner.ExecuteAsync(messages, session, source.Token);
                     var cancelTask = CancelAgentAsync(source);
                     var mainTask = Task.WhenAny(executeTask, cancelTask);
@@ -138,24 +153,24 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         }
     }
 
-    private void LogConfig()
+    private static void LogConfig(WorkingOptions working, ChatClientOptions client)
     {
         Table table = new Table();
         table.AddColumn("配置项");
         table.AddColumn("值");
-        if (!string.IsNullOrWhiteSpace(_chatClientOptions.Value.Provider))
+        if (!string.IsNullOrWhiteSpace(client.Provider))
         {
-            table.AddRow(new Text("Provider"), new Text(_chatClientOptions.Value.Provider));
+            table.AddRow(new Text("Provider"), new Text(client.Provider));
         }
-        if (!string.IsNullOrWhiteSpace(_chatClientOptions.Value.BaseUrl))
+        if (!string.IsNullOrWhiteSpace(client.BaseUrl))
         {
-            table.AddRow(new Text("BaseUrl"), new Text(_chatClientOptions.Value.BaseUrl));
+            table.AddRow(new Text("BaseUrl"), new Text(client.BaseUrl));
         }
-        if (!string.IsNullOrWhiteSpace(_chatClientOptions.Value.ModelId))
+        if (!string.IsNullOrWhiteSpace(client.ModelId))
         {
-            table.AddRow(new Text("ModelId"), new Text(_chatClientOptions.Value.ModelId));
+            table.AddRow(new Text("ModelId"), new Text(client.ModelId));
         }
-        table.AddRow(new Text("Working"), new Text(_workingOptions.Value.BasePath));
+        table.AddRow(new Text("Working"), new Text(working.BasePath));
         AnsiConsole.Write(table);
     }
 
