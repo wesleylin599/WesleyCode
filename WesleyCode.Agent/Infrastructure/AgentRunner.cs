@@ -76,7 +76,11 @@ internal class AgentRunner : IAgentRunner
         {
             Name = options.Value.Name,
             Description = options.Value.Description,
-            ChatOptions = new ChatOptions { Instructions = options.Value.Instructions },
+            ChatOptions = new ChatOptions
+            {
+                Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High, Output = ReasoningOutput.Summary },
+                Instructions = options.Value.Instructions,
+            },
             AIContextProviders = providers,
         };
 

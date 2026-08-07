@@ -72,6 +72,12 @@ public static class ServiceCollectionExtensions
                 config.BasePath = workDirectory;
             });
         services
+            .AddOptions<SkillOptions>()
+            .Configure(config =>
+            {
+                config.SkillPath = Path.Combine(AppContext.BaseDirectory, "skills");
+            });
+        services
             .AddOptions<ChatClientOptions>()
             .Configure<IConfiguration>(
                 (options, configuration) =>
@@ -80,16 +86,6 @@ public static class ServiceCollectionExtensions
                     options.ModelId = configuration.GetValue<string>("WESLEY_MODELID");
                     options.BaseUrl = configuration.GetValue<string>("WESLEY_BASEURL");
                     options.ApiKey = configuration.GetValue<string>("WESLEY_APIKEY");
-                }
-            );
-        services
-            .AddOptions<ImageClientOptions>()
-            .Configure<IConfiguration>(
-                (options, configuration) =>
-                {
-                    options.ModelId = configuration.GetValue<string>("WESLEY_IMAGE_MODELID");
-                    options.BaseUrl = configuration.GetValue<string>("WESLEY_IMAGE_BASEURL");
-                    options.ApiKey = configuration.GetValue<string>("WESLEY_IMAGE_APIKEY");
                 }
             );
         services
@@ -109,24 +105,20 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ISessionStore, SessionStore>();
         services.AddSingleton<IAgentRunner, AgentRunner>();
 
-        var skills = Path.Combine(AppContext.BaseDirectory, "skills");
-        services.RegisterAIProviders(skills);
+        services.RegisterAIProviders();
         services.RegisterAIAgent();
 
         return services;
     }
 
-    private static void RegisterAIProviders(this IServiceCollection services, string skillsPath)
+    private static void RegisterAIProviders(this IServiceCollection services)
     {
         // 基础 Provider
         services.AddTransient<AIContextProvider, CommandProvider>();
+        services.AddTransient<AIContextProvider, FileSkillsProvider>();
         services.AddTransient<AIContextProvider, SystemPromptProvider>();
-        services.AddTransient<AIContextProvider, NetworkRequestProvider>();
-        services.AddTransient<AIContextProvider, ImageGenerationProvider>();
-        services.AddTransient<AIContextProvider, WorkspaceFilePolicyProvider>();
 
         // 技能 Provider
-        services.AddTransient<AIContextProvider>(provider => new UserSkillsProvider(skillsPath));
 
         // Todo Provider（禁用列表消息）
         services.AddTransient<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
@@ -134,6 +126,17 @@ public static class ServiceCollectionExtensions
         // Agent 模式 Provider
         services.AddTransient<AIContextProvider>(provider => new AgentModeProvider(
             new AgentModeProviderOptions { DefaultMode = AgentModes.DefaultMode, Modes = AgentModes.Modes }
+        ));
+
+        // Memory Provider
+        services.AddTransient<AIContextProvider>(provider => new FileMemoryProvider(
+            new FileSystemAgentFileStore(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath)
+        ));
+
+        // File Access Provider
+        services.AddTransient<AIContextProvider>(provider => new FileAccessProvider(
+            new FileSystemAgentFileStore(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath),
+            new FileAccessProviderOptions { DisableReadOnlyToolApproval = true, DisableWriteToolApproval = true }
         ));
 
         // 上下文压缩 Provider
@@ -148,14 +151,14 @@ public static class ServiceCollectionExtensions
         // 技能执行 Provider（禁用审批）
         services.AddTransient<AIContextProvider>(provider =>
             new AgentSkillsProviderBuilder()
+                .UseFileSkill(provider.GetRequiredService<IOptions<SkillOptions>>().Value.SkillPath)
                 .UseOptions(options =>
                 {
-                    options.DisableLoadSkillApproval = true;
-                    options.DisableRunSkillScriptApproval = true;
                     options.DisableReadSkillResourceApproval = true;
+                    options.DisableRunSkillScriptApproval = true;
+                    options.DisableLoadSkillApproval = true;
                 })
                 .UseFileScriptRunner(CliWrapRunner.RunAsync)
-                .UseFileSkill(skillsPath)
                 .DisableCaching()
                 .Build()
         );
