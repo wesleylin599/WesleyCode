@@ -7,7 +7,7 @@ namespace WesleyCode.Agent.Services;
 
 internal sealed class SystemPromptProvider : AIContextProvider
 {
-    private const string SystemPromptName = "SYSTEM.md";
+    private const string SystemPromptName = "AGENTS.md";
 
     private readonly IOptions<WorkingOptions> _options;
 

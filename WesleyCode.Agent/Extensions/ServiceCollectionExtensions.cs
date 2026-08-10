@@ -2,6 +2,7 @@
 using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
+using Microsoft.Agents.AI.Tools.Shell;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -113,12 +114,20 @@ public static class ServiceCollectionExtensions
 
     private static void RegisterAIProviders(this IServiceCollection services)
     {
+        services.AddTransient<ShellExecutor>(provider => new LocalShellExecutor(
+            new LocalShellExecutorOptions
+            {
+                WorkingDirectory = provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath,
+                Timeout = TimeSpan.FromMinutes(5),
+                ConfineWorkingDirectory = true,
+                AcknowledgeUnsafe = true,
+            }
+        ));
+
         // 基础 Provider
         services.AddTransient<AIContextProvider, CommandProvider>();
         services.AddTransient<AIContextProvider, FileSkillsProvider>();
         services.AddTransient<AIContextProvider, SystemPromptProvider>();
-
-        // 技能 Provider
 
         // Todo Provider（禁用列表消息）
         services.AddTransient<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));

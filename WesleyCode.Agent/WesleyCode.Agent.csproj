@@ -8,8 +8,9 @@
 
     <ItemGroup>
         <PackageReference Include="CliWrap" Version="3.10.4" />
-        <PackageReference Include="Anthropic" Version="12.39.0" />
+        <PackageReference Include="Anthropic" Version="12.40.0" />
         <PackageReference Include="Microsoft.Agents.AI" Version="1.17.0" />
+        <PackageReference Include="Microsoft.Agents.AI.Harness" Version="1.17.0" />
         <PackageReference Include="Microsoft.Agents.AI.Tools.Shell" Version="1.17.0-preview.260804.1" />
         <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.3" />
         <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.10" />
