@@ -16,10 +16,7 @@ internal sealed class SystemPromptProvider : AIContextProvider
         _options = options;
     }
 
-    protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default) =>
-        new AIContext { Instructions = await BuildPromptAsync(cancellationToken) };
-
-    private async Task<string> BuildPromptAsync(CancellationToken cancellationToken = default)
+    protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
         var builder = new StringBuilder();
         builder.AppendLine("## System Prompt");
@@ -38,7 +35,7 @@ internal sealed class SystemPromptProvider : AIContextProvider
             builder.AppendLine(prompt);
         }
 
-        return builder.ToString().Trim();
+        return new AIContext { Instructions = builder.ToString().Trim() };
     }
 
     private IEnumerable<string> EnumeratePromptFiles()

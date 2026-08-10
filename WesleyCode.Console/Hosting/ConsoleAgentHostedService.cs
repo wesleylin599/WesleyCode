@@ -136,6 +136,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
                     var cancelTask = CancelAgentAsync(source);
                     var mainTask = Task.WhenAny(executeTask, cancelTask);
                     await AnsiConsole.Status().StartAsync("执行中（按 Esc 取消）", _ => mainTask);
+                    await executeTask;
                 }
                 finally
                 {

@@ -2,7 +2,6 @@
 using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
-using Microsoft.Agents.AI.Tools.Shell;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,7 +32,7 @@ public static class ServiceCollectionExtensions
 
         var encoding = Encoding.GetEncoding(result.Detected?.EncodingName ?? "UTF-8");
 
-        return encoding.GetString(bytes);
+        return encoding.GetString(bytes).TrimEnd();
     }
 
     public static string ComputeMd5(this string target) => Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(target))).ToLowerInvariant();
@@ -90,18 +89,13 @@ public static class ServiceCollectionExtensions
                 }
             );
         services
-            .AddOptions<AgentOptions>()
-            .Configure(config =>
-            {
-                config.Name = "main";
-            });
-
-        services
             .AddOptions<SessionOptions>()
             .Configure(config =>
             {
                 config.DirectoryName = "session";
             });
+
+        services.AddOptions<ChatOptions>().BindConfiguration("ChatClient");
 
         services.AddTransient<ISessionStore, SessionStore>();
         services.AddSingleton<IAgentRunner, AgentRunner>();
@@ -114,16 +108,6 @@ public static class ServiceCollectionExtensions
 
     private static void RegisterAIProviders(this IServiceCollection services)
     {
-        services.AddTransient<ShellExecutor>(provider => new LocalShellExecutor(
-            new LocalShellExecutorOptions
-            {
-                WorkingDirectory = provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath,
-                Timeout = TimeSpan.FromMinutes(5),
-                ConfineWorkingDirectory = true,
-                AcknowledgeUnsafe = true,
-            }
-        ));
-
         // 基础 Provider
         services.AddTransient<AIContextProvider, CommandProvider>();
         services.AddTransient<AIContextProvider, FileSkillsProvider>();

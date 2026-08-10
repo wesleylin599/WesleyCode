@@ -4,7 +4,6 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Interfaces;
-using WesleyCode.Agent.Options;
 
 namespace WesleyCode.Agent.Infrastructure;
 
@@ -13,7 +12,7 @@ internal class AgentRunner : IAgentRunner
     private readonly AIAgent _agent;
     private readonly IOutputCapture _capture;
 
-    public AgentRunner(IChatClient client, IOutputCapture capture, IEnumerable<AIContextProvider> providers, IOptions<AgentOptions> options)
+    public AgentRunner(IChatClient client, IOutputCapture capture, IOptions<ChatOptions> options, IEnumerable<AIContextProvider> providers)
     {
         this._agent = client
             .AsAIAgent(BuildChatClientAgentOptions(options, providers))
@@ -71,17 +70,19 @@ internal class AgentRunner : IAgentRunner
         return Task.CompletedTask;
     }
 
-    private static ChatClientAgentOptions BuildChatClientAgentOptions(IOptions<AgentOptions> options, IEnumerable<AIContextProvider> providers) =>
+    private static ChatClientAgentOptions BuildChatClientAgentOptions(IOptions<ChatOptions> options, IEnumerable<AIContextProvider> providers) =>
         new ChatClientAgentOptions
         {
-            Name = options.Value.Name,
-            Description = options.Value.Description,
-            ChatOptions = new ChatOptions
-            {
-                Reasoning = new ReasoningOptions { Effort = ReasoningEffort.High, Output = ReasoningOutput.Summary },
-                Instructions = options.Value.Instructions,
-            },
+            Name = "main",
+            ChatOptions = options.Value,
             AIContextProviders = providers,
+            ChatHistoryProvider = new InMemoryChatHistoryProvider(
+                new InMemoryChatHistoryProviderOptions
+                {
+                    StorageInputRequestMessageFilter = message => message,
+                    StorageInputResponseMessageFilter = message => message,
+                }
+            ),
         };
 
     private static ToolApprovalAgentOptions BuildToolApprovalAgentOptions() =>

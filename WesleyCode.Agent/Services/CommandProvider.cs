@@ -1,170 +1,98 @@
-﻿using System.Runtime.InteropServices;
-using System.Text;
+﻿using System.ComponentModel;
+using System.Text.Json.Serialization;
+using CliWrap;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Tools.Shell;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
+using WesleyCode.Agent.Extensions;
+using WesleyCode.Agent.Options;
 
 namespace WesleyCode.Agent.Services;
 
 internal sealed class CommandProvider : AIContextProvider
 {
-    private IReadOnlyList<string> ProbeTools { get; init; } = ["git", "dotnet", "node", "python", "docker", "curl"];
+    private static readonly string fileName = OperatingSystem.IsWindows() ? "powershell" : "bash";
 
-    private readonly ShellExecutor _executor;
+    private readonly IOptions<WorkingOptions> _options;
 
-    public CommandProvider(ShellExecutor executor)
+    public CommandProvider(IOptions<WorkingOptions> options)
     {
-        this._executor = executor;
+        this._options = options;
     }
 
-    protected override async ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
-    {
-        var snapshot = await this.ProbeAsync(cancellationToken).ConfigureAwait(false);
-        return new AIContext { Instructions = DefaultInstructionsFormatter(snapshot), Tools = [_executor.AsAIFunction(requireApproval: false)] };
-    }
-
-    private async Task<(string? Version, string Cwd)> ProbeShellAndCwdAsync(ShellFamily family, CancellationToken cancellationToken)
-    {
-        var probe =
-            family == ShellFamily.PowerShell
-                ? "Write-Output (\"VERSION=\" + $PSVersionTable.PSVersion.ToString()); Write-Output (\"CWD=\" + (Get-Location).Path)"
-                : "echo \"VERSION=${BASH_VERSION:-${ZSH_VERSION:-unknown}}\"; echo \"CWD=$PWD\"";
-
-        var result = await this.RunProbeAsync(probe, cancellationToken).ConfigureAwait(false);
-        if (result is null)
-        {
-            return (null, string.Empty);
-        }
-
-        string? version = null;
-        string cwd = string.Empty;
-        foreach (var line in result.Stdout.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (line.StartsWith("VERSION=", StringComparison.Ordinal))
+    protected override ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(
+            new AIContext
             {
-                var v = line.Substring("VERSION=".Length).Trim();
-                version = string.IsNullOrEmpty(v) || v == "unknown" ? null : v;
+                Instructions = $"""
+                ## Command Environment
+                当前使用的命令行工具是`{fileName}`
+                命令行工具的工作目录路径是`{_options.Value.BasePath}`
+                使用`run_command`来调用命令行工具执行命令
+                """,
+                Tools =
+                [
+                    AIFunctionFactory.Create(CommandRunAsync, new AIFunctionFactoryOptions { Name = "command_run", Description = "执行命令行" }),
+                ],
             }
-            else if (line.StartsWith("CWD=", StringComparison.Ordinal))
-            {
-                cwd = line.Substring("CWD=".Length).Trim();
-            }
-        }
-        return (version, cwd);
-    }
+        );
 
-    private async Task<string?> ProbeToolVersionAsync(string tool, CancellationToken cancellationToken)
+    private async Task<CommandRunResult> CommandRunAsync(
+        [Description("命令行")] string command,
+        [Description("执行超时时间/秒")] int timeout,
+        CancellationToken cancellationToken = default
+    )
     {
-        if (string.IsNullOrEmpty(tool) || !s_toolNamePattern.IsMatch(tool))
-        {
-            return null;
-        }
-
-        var probe = $"{tool} --version";
-        var result = await this.RunProbeAsync(probe, cancellationToken).ConfigureAwait(false);
-        if (result is null || result.ExitCode != 0)
-        {
-            return null;
-        }
-
-        var firstLine = FirstNonEmptyLine(result.Stdout) ?? FirstNonEmptyLine(result.Stderr);
-        return string.IsNullOrWhiteSpace(firstLine) ? null : firstLine!.Trim();
-
-        static string? FirstNonEmptyLine(string text) => text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-    }
-
-    private async Task<ShellResult?> RunProbeAsync(string command, CancellationToken cancellationToken)
-    {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(15));
+        CommandRunResult output = new CommandRunResult();
         try
         {
-            return await this._executor.RunAsync(command, cts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return null;
-        }
-        catch (Exception ex) when (ex is ShellCommandRejectedException || ex is IOException || ex is TimeoutException)
-        {
-            return null;
-        }
-    }
+            if (string.IsNullOrEmpty(command))
+                throw new ArgumentNullException(nameof(command));
 
-    private async Task<ShellEnvironmentSnapshot> ProbeAsync(CancellationToken cancellationToken)
-    {
-        var family = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ShellFamily.PowerShell : ShellFamily.Posix;
-
-        await this._executor.InitializeAsync(cancellationToken).ConfigureAwait(false);
-
-        var (shellVersion, workingDir) = await this.ProbeShellAndCwdAsync(family, cancellationToken).ConfigureAwait(false);
-
-        var toolVersions = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var tool in this.ProbeTools)
-        {
-            if (toolVersions.ContainsKey(tool))
+            List<string> arguments = fileName switch
             {
-                continue;
-            }
-            toolVersions[tool] = await this.ProbeToolVersionAsync(tool, cancellationToken).ConfigureAwait(false);
+                "bash" => ["--noprofile", "--norc", "-c", command],
+                "powershell" => ["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", command],
+                _ => throw new InvalidOperationException($"Unsupported shell: {fileName}"),
+            };
+
+            var timeoutSeconds = timeout <= 0 ? 300 : Math.Min(timeout, 3600);
+            using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+
+            using var standardOutput = new MemoryStream();
+            using var standardError = new MemoryStream();
+
+            var cli = Cli.Wrap(fileName)
+                .WithArguments(arguments)
+                .WithWorkingDirectory(_options.Value.BasePath)
+                .WithStandardOutputPipe(PipeTarget.ToStream(standardOutput))
+                .WithStandardErrorPipe(PipeTarget.ToStream(standardError))
+                .WithValidation(CommandResultValidation.None);
+
+            var execute = await cli.ExecuteAsync(timeoutSource.Token);
+            output.ExitCode = execute.ExitCode;
+            output.Output = standardOutput.DecodeOutput();
+            output.Error = standardError.DecodeOutput();
+        }
+        catch (Exception ex)
+        {
+            output.ExitCode = -1;
+            output.Error = $"调用失败 {ex.Message} 修复后重试";
         }
 
-        return new ShellEnvironmentSnapshot(
-            Family: family,
-            OSDescription: RuntimeInformation.OSDescription,
-            ShellVersion: shellVersion,
-            WorkingDirectory: workingDir,
-            ToolVersions: toolVersions
-        );
+        return output;
     }
 
-    private static string DefaultInstructionsFormatter(ShellEnvironmentSnapshot snapshot)
+    private sealed class CommandRunResult
     {
-        var sb = new StringBuilder();
-        _ = sb.AppendLine("## Shell environment");
+        [JsonPropertyName("exit_code")]
+        public int ExitCode { get; set; }
 
-        if (snapshot.Family == ShellFamily.PowerShell)
-        {
-            var version = snapshot.ShellVersion is null ? string.Empty : $" {snapshot.ShellVersion}";
-            _ = sb.Append("You are operating a PowerShell").Append(version).Append(" session on ").Append(snapshot.OSDescription).AppendLine(".");
-            _ = sb.AppendLine("Use PowerShell idioms, NOT bash:");
-            _ = sb.AppendLine("- Set environment variables with `$env:NAME = 'value'` (NOT `NAME=value`).");
-            _ = sb.AppendLine("- Change directory with `Set-Location` or `cd`. Paths use `\\` separators.");
-            _ = sb.AppendLine("- Reference environment variables as `$env:NAME` (NOT `$NAME`).");
-            _ = sb.AppendLine("- The system temp directory is `[System.IO.Path]::GetTempPath()` (NOT `/tmp`).");
-            _ = sb.AppendLine("- Pipe to `Out-Null` to suppress output (NOT `> /dev/null`).");
-        }
-        else
-        {
-            var version = snapshot.ShellVersion is null ? string.Empty : $" {snapshot.ShellVersion}";
-            _ = sb.Append("You are operating a POSIX shell").Append(version).Append(" session on ").Append(snapshot.OSDescription).AppendLine(".");
-            _ = sb.AppendLine("Use POSIX shell idioms (bash/sh).");
-            _ = sb.AppendLine("- Set environment variables for the next command with `export NAME=value`.");
-            _ = sb.AppendLine("- Reference environment variables as `$NAME` or `${NAME}`.");
-            _ = sb.AppendLine("- Paths use `/` separators.");
-        }
+        [JsonPropertyName("output")]
+        public string Output { get; set; } = string.Empty;
 
-        if (!string.IsNullOrEmpty(snapshot.WorkingDirectory))
-        {
-            _ = sb.Append("Working directory: ").AppendLine(snapshot.WorkingDirectory);
-        }
-
-        var installed = snapshot.ToolVersions.Where(kv => kv.Value is not null).Select(kv => $"{kv.Key} ({kv.Value})").ToList();
-        var missing = snapshot.ToolVersions.Where(kv => kv.Value is null).Select(kv => kv.Key).ToList();
-
-        if (installed.Count > 0)
-        {
-            _ = sb.Append("Available CLIs: ").AppendLine(string.Join(", ", installed));
-        }
-        if (missing.Count > 0)
-        {
-            _ = sb.Append("Not installed: ").AppendLine(string.Join(", ", missing));
-        }
-
-        return sb.ToString().TrimEnd();
+        [JsonPropertyName("error")]
+        public string Error { get; set; } = string.Empty;
     }
-
-    private static readonly System.Text.RegularExpressions.Regex s_toolNamePattern = new(
-        "^[A-Za-z0-9._-]+$",
-        System.Text.RegularExpressions.RegexOptions.Compiled
-    );
 }

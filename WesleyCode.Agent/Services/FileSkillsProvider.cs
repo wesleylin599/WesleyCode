@@ -8,9 +8,6 @@ namespace WesleyCode.Agent.Services;
 
 internal sealed class FileSkillsProvider : AIContextProvider
 {
-    private static readonly object ToolsLock = new();
-    private static AIFunction[]? _tools;
-
     private readonly string _skillsRoot;
     private readonly AgentFileStore _store;
 
@@ -20,9 +17,8 @@ internal sealed class FileSkillsProvider : AIContextProvider
         _store = new FileSystemAgentFileStore(_skillsRoot);
     }
 
-    protected override ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
-    {
-        return ValueTask.FromResult(
+    protected override ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(
             new AIContext
             {
                 Instructions = $"""
@@ -36,23 +32,9 @@ internal sealed class FileSkillsProvider : AIContextProvider
                 所有文件路径都必须相对于该 skills 根目录，不要使用绝对路径。
                 当需要创建或修改 skill 时，使用这些工具。
                 """,
-                Tools = GetTools(),
+                Tools = CreateTools(),
             }
         );
-    }
-
-    private AIFunction[] GetTools()
-    {
-        if (_tools is not null)
-        {
-            return _tools;
-        }
-
-        lock (ToolsLock)
-        {
-            return _tools ??= CreateTools();
-        }
-    }
 
     private AIFunction[] CreateTools() =>
         [
