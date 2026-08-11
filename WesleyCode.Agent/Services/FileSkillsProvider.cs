@@ -24,11 +24,11 @@ internal sealed class FileSkillsProvider : AIContextProvider
                 Instructions = $"""
                 ## Skills File Access
                 你可以使用以下工具直接操作 skills 目录，根目录是 `{_skillsRoot}`：
-                - `user_skills_list_children`：列出指定目录下的直接子项。
-                - `user_skills_read_file`：读取文件内容。
-                - `user_skills_save_file`：保存文件，默认不覆盖已存在文件。
-                - `user_skills_delete_file`：删除文件。
-                - `user_skills_search_files`：按正则表达式递归搜索文件内容。
+                - `list_skills_children`：列出指定目录下的直接子项。
+                - `read_skills_file`：读取文件内容。
+                - `save_skills_file`：保存文件，默认不覆盖已存在文件。
+                - `delete_skills_file`：删除文件。
+                - `search_skills_files`：按正则表达式递归搜索文件内容。
                 所有文件路径都必须相对于该 skills 根目录，不要使用绝对路径。
                 当需要创建或修改 skill 时，使用这些工具。
                 """,
