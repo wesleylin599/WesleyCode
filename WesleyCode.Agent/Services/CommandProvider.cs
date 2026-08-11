@@ -28,7 +28,7 @@ internal sealed class CommandProvider : AIContextProvider
                 ## Command Environment
                 当前使用的命令行工具是`{fileName}`
                 命令行工具的工作目录路径是`{_options.Value.BasePath}`
-                使用`run_command`来调用命令行工具执行命令
+                使用`command_run`来调用命令行工具执行命令
                 """,
                 Tools =
                 [

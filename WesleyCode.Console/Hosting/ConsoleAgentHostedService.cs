@@ -84,6 +84,7 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
     {
         try
         {
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
             await _sessionStore.SaveAsync(session, cancellationToken);
         }
         catch (Exception ex)

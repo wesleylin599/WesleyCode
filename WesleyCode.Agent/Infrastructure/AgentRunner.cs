@@ -79,8 +79,14 @@ internal class AgentRunner : IAgentRunner
             ChatHistoryProvider = new InMemoryChatHistoryProvider(
                 new InMemoryChatHistoryProviderOptions
                 {
-                    StorageInputRequestMessageFilter = message => message,
-                    StorageInputResponseMessageFilter = message => message,
+                    StorageInputRequestMessageFilter = messages =>
+                    {
+                        var typeMessages = messages.Where(m => m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory);
+                        return typeMessages.Any()
+                            ? typeMessages
+                            : messages.Where(m => m.GetAgentRequestMessageSourceId() != typeof(InMemoryChatHistoryProvider).FullName);
+                    },
+                    StorageInputResponseMessageFilter = messages => messages,
                 }
             ),
         };
