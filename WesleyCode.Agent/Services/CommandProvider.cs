@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Text;
 using System.Text.Json.Serialization;
 using CliWrap;
 using Microsoft.Agents.AI;
@@ -11,7 +12,7 @@ namespace WesleyCode.Agent.Services;
 
 internal sealed class CommandProvider : AIContextProvider
 {
-    private static readonly string fileName = OperatingSystem.IsWindows() ? "powershell" : "bash";
+    private static readonly ShellFamily family = OperatingSystem.IsWindows() ? ShellFamily.PowerShell : ShellFamily.Bash;
 
     private readonly IOptions<WorkingOptions> _options;
 
@@ -24,12 +25,7 @@ internal sealed class CommandProvider : AIContextProvider
         ValueTask.FromResult(
             new AIContext
             {
-                Instructions = $"""
-                ## Command Environment
-                当前使用的命令行工具是`{fileName}`
-                命令行工具的工作目录路径是`{_options.Value.BasePath}`
-                使用`command_run`来调用命令行工具执行命令
-                """,
+                Instructions = DefaultInstructionsFormatter(family, _options.Value.BasePath),
                 Tools =
                 [
                     AIFunctionFactory.Create(CommandRunAsync, new AIFunctionFactoryOptions { Name = "command_run", Description = "执行命令行" }),
@@ -49,11 +45,11 @@ internal sealed class CommandProvider : AIContextProvider
             if (string.IsNullOrEmpty(command))
                 throw new ArgumentNullException(nameof(command));
 
-            List<string> arguments = fileName switch
+            List<string> arguments = family switch
             {
-                "bash" => ["--noprofile", "--norc", "-c", command],
-                "powershell" => ["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", command],
-                _ => throw new InvalidOperationException($"Unsupported shell: {fileName}"),
+                ShellFamily.Bash => ["--noprofile", "--norc", "-c", command],
+                ShellFamily.PowerShell => ["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", command],
+                _ => throw new InvalidOperationException($"Unsupported shell: {family}"),
             };
 
             var timeoutSeconds = timeout <= 0 ? 300 : Math.Min(timeout, 3600);
@@ -63,7 +59,7 @@ internal sealed class CommandProvider : AIContextProvider
             using var standardOutput = new MemoryStream();
             using var standardError = new MemoryStream();
 
-            var cli = Cli.Wrap(fileName)
+            var cli = Cli.Wrap(family.ToString())
                 .WithArguments(arguments)
                 .WithWorkingDirectory(_options.Value.BasePath)
                 .WithStandardOutputPipe(PipeTarget.ToStream(standardOutput))
@@ -84,6 +80,36 @@ internal sealed class CommandProvider : AIContextProvider
         return output;
     }
 
+    private static string DefaultInstructionsFormatter(ShellFamily family, string working)
+    {
+        var sb = new StringBuilder();
+        _ = sb.AppendLine("## Command environment");
+
+        if (family == ShellFamily.PowerShell)
+        {
+            _ = sb.Append("你正在使用 PowerShell。");
+            _ = sb.AppendLine("请使用 PowerShell 语法，而不是 bash：");
+            _ = sb.AppendLine("- 使用 `$env:NAME = 'value'` 设置环境变量（不要使用 `NAME=value`）。");
+            _ = sb.AppendLine("- 使用 `Set-Location` 或 `cd` 切换目录。路径使用 `\\` 作为分隔符。");
+            _ = sb.AppendLine("- 使用 `$env:NAME` 引用环境变量（不要使用 `$NAME`）。");
+            _ = sb.AppendLine("- 系统临时目录为 `[System.IO.Path]::GetTempPath()`（不要使用 `/tmp`）。");
+            _ = sb.AppendLine("- 使用 `Out-Null` 管道来抑制输出（不要使用 `> /dev/null`）。");
+        }
+        else
+        {
+            _ = sb.Append("你正在使用 POSIX Shell。");
+            _ = sb.AppendLine("请使用 POSIX Shell 语法（bash/sh）。");
+            _ = sb.AppendLine("- 使用 `export NAME=value` 为后续命令设置环境变量。");
+            _ = sb.AppendLine("- 使用 `$NAME` 或 `${NAME}` 引用环境变量。");
+            _ = sb.AppendLine("- 路径使用 `/` 作为分隔符。");
+        }
+
+        _ = sb.Append("工作目录：").AppendLine(working);
+        _ = sb.Append("使用 `command_run` 来调用命令行工具执行命令");
+
+        return sb.ToString().TrimEnd();
+    }
+
     private sealed class CommandRunResult
     {
         [JsonPropertyName("exit_code")]
@@ -94,5 +120,11 @@ internal sealed class CommandProvider : AIContextProvider
 
         [JsonPropertyName("error")]
         public string Error { get; set; } = string.Empty;
+    }
+
+    private enum ShellFamily
+    {
+        PowerShell,
+        Bash,
     }
 }
