@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""列出 GitHub 仓库路径下的 skills，并标记当前应用中已安装的项。"""
+"""List skills from a GitHub repository path and mark installed ones."""
 
 from __future__ import annotations
 
@@ -70,31 +70,31 @@ def _list_skills(repo: str, path: str, ref: str) -> list[str]:
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             raise ListError(
-                "未找到 skills 路径："
+                "Skills path not found: "
                 f"https://github.com/{repo}/tree/{ref}/{path}"
             ) from exc
-        raise ListError(f"获取 skills 列表失败：HTTP {exc.code}") from exc
+        raise ListError(f"Failed to fetch skills list: HTTP {exc.code}") from exc
     data = json.loads(payload.decode("utf-8"))
     if not isinstance(data, list):
-        raise ListError("skills 列表响应格式不符合预期。")
+        raise ListError("Unexpected skills list response format.")
     skills = [item["name"] for item in data if item.get("type") == "dir"]
     return sorted(skills)
 
 
 def _parse_args(argv: list[str]) -> Args:
-    parser = argparse.ArgumentParser(description="列出可安装的 skills。")
+    parser = argparse.ArgumentParser(description="List installable skills.")
     parser.add_argument("--repo", default=DEFAULT_REPO)
     parser.add_argument(
         "--path",
         default=DEFAULT_PATH,
-        help="要列出的仓库路径（默认：skills/.curated）",
+        help="Repository path to list (default: skills/.curated)",
     )
     parser.add_argument("--ref", default=DEFAULT_REF)
     parser.add_argument(
         "--format",
         choices=["text", "json"],
         default="text",
-        help="输出格式",
+        help="Output format",
     )
     return parser.parse_args(argv, namespace=Args())
 
@@ -111,11 +111,11 @@ def main(argv: list[str]) -> int:
             print(json.dumps(payload, ensure_ascii=False))
         else:
             for idx, name in enumerate(skills, start=1):
-                suffix = "（已安装）" if name in installed else ""
+                suffix = " (installed)" if name in installed else ""
                 print(f"{idx}. {name}{suffix}")
         return 0
     except ListError as exc:
-        print(f"错误：{exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
 

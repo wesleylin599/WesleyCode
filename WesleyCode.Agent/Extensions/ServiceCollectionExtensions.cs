@@ -30,12 +30,12 @@ public static class ServiceCollectionExtensions
 
         var result = CharsetDetector.DetectFromBytes(bytes);
 
-        var encoding = Encoding.GetEncoding(result.Detected?.EncodingName ?? "UTF-8");
+        var encoding = result.Detected?.Encoding ?? Encoding.Default;
 
         return encoding.GetString(bytes).TrimEnd();
     }
 
-    public static string ComputeMd5(this string target) => Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(target))).ToLowerInvariant();
+    public static string ComputeMd5(this string target) => Convert.ToHexString(MD5.HashData(Encoding.Default.GetBytes(target))).ToLowerInvariant();
 
     public static void CommonWriteMessage(this IOutputCapture capture, string? author, AIContent content)
     {
@@ -135,7 +135,7 @@ public static class ServiceCollectionExtensions
         // 上下文压缩 Provider
         services.AddTransient<AIContextProvider>(provider => new CompactionProvider(
             new TruncationCompactionStrategy(
-                trigger: CompactionTriggers.Any(CompactionTriggers.GroupsExceed(50), CompactionTriggers.TokensExceed(50000)),
+                trigger: CompactionTriggers.Any(CompactionTriggers.GroupsExceed(100), CompactionTriggers.TokensExceed(50000)),
                 minimumPreservedGroups: 32,
                 target: CompactionTriggers.TokensBelow(20000)
             )

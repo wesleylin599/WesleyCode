@@ -15,12 +15,12 @@ internal static class CliWrapRunner
         CancellationToken cancellationToken
     )
     {
-        using var standardOutput = new MemoryStream();
-        using var standardError = new MemoryStream();
         var (commandPath, commandArguments) = BuildCommand(script.FullPath, ParseArguments(arguments));
 
         try
         {
+            using var standardOutput = new MemoryStream();
+            using var standardError = new MemoryStream();
             var command = Cli.Wrap(commandPath)
                 .WithArguments(commandArguments)
                 .WithWorkingDirectory(skill.Path)
@@ -38,12 +38,7 @@ internal static class CliWrapRunner
         }
         catch (Exception ex)
         {
-            return new
-            {
-                code = -1,
-                output = standardOutput.DecodeOutput(),
-                error = $"脚本执行失败：{ex.Message}",
-            };
+            return new { code = -1, error = $"脚本执行失败：{ex.Message}" };
         }
     }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""共享的 GitHub 辅助方法。"""
+"""Shared GitHub helper functions."""
 
 from __future__ import annotations
 

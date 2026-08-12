@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""从 GitHub 仓库路径安装 skill 到当前 WesleyCode 应用的 skills 目录。"""
+"""Install skills from a GitHub repository path into the current WesleyCode skills directory."""
 
 from __future__ import annotations
 
@@ -69,17 +69,17 @@ def _request(url: str) -> bytes:
 def _parse_github_url(url: str, default_ref: str) -> tuple[str, str, str, str | None]:
     parsed = urllib.parse.urlparse(url)
     if parsed.netloc != "github.com":
-        raise InstallError("下载模式只支持 GitHub 链接。")
+        raise InstallError("Download mode only supports GitHub URLs.")
     parts = [p for p in parsed.path.split("/") if p]
     if len(parts) < 2:
-        raise InstallError("GitHub 链接格式无效。")
+        raise InstallError("Invalid GitHub URL format.")
     owner, repo = parts[0], parts[1]
     ref = default_ref
     subpath = ""
     if len(parts) > 2:
         if parts[2] in ("tree", "blob"):
             if len(parts) < 4:
-                raise InstallError("GitHub 链接缺少 ref 或路径。")
+                raise InstallError("GitHub URL is missing a ref or path.")
             ref = parts[3]
             subpath = "/".join(parts[4:])
         else:
@@ -93,23 +93,23 @@ def _download_repo_zip(owner: str, repo: str, ref: str, dest_dir: str) -> str:
     try:
         payload = _request(zip_url)
     except urllib.error.HTTPError as exc:
-        raise InstallError(f"下载失败：HTTP {exc.code}") from exc
+        raise InstallError(f"Download failed: HTTP {exc.code}") from exc
     with open(zip_path, "wb") as file_handle:
         file_handle.write(payload)
     with zipfile.ZipFile(zip_path, "r") as zip_file:
         _safe_extract_zip(zip_file, dest_dir)
         top_levels = {name.split("/")[0] for name in zip_file.namelist() if name}
     if not top_levels:
-        raise InstallError("下载到的压缩包为空。")
+        raise InstallError("Downloaded archive is empty.")
     if len(top_levels) != 1:
-        raise InstallError("压缩包目录结构不符合预期。")
+        raise InstallError("Unexpected archive directory layout.")
     return os.path.join(dest_dir, next(iter(top_levels)))
 
 
 def _run_git(args: list[str]) -> None:
     result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
-        raise InstallError(result.stderr.strip() or "Git 命令执行失败。")
+        raise InstallError(result.stderr.strip() or "Git command failed.")
 
 
 def _safe_extract_zip(zip_file: zipfile.ZipFile, dest_dir: str) -> None:
@@ -118,21 +118,21 @@ def _safe_extract_zip(zip_file: zipfile.ZipFile, dest_dir: str) -> None:
         extracted_path = os.path.realpath(os.path.join(dest_dir, info.filename))
         if extracted_path == dest_root or extracted_path.startswith(dest_root + os.sep):
             continue
-        raise InstallError("压缩包包含目标目录之外的文件。")
+        raise InstallError("Archive contains files outside the target directory.")
     zip_file.extractall(dest_dir)
 
 
 def _validate_relative_path(path: str) -> None:
     if os.path.isabs(path) or os.path.normpath(path).startswith(".."):
-        raise InstallError("Skill 路径必须是仓库内部的相对路径。")
+        raise InstallError("Skill path must be a relative path inside the repository.")
 
 
 def _validate_skill_name(name: str) -> None:
     altsep = os.path.altsep
     if not name or os.path.sep in name or (altsep and altsep in name):
-        raise InstallError("Skill 名称必须是单个路径段。")
+        raise InstallError("Skill name must be a single path segment.")
     if name in (".", ".."):
-        raise InstallError("Skill 名称无效。")
+        raise InstallError("Invalid skill name.")
 
 
 def _git_sparse_checkout(repo_url: str, ref: str, paths: list[str], dest_dir: str) -> str:
@@ -173,16 +173,16 @@ def _git_sparse_checkout(repo_url: str, ref: str, paths: list[str], dest_dir: st
 
 def _validate_skill(path: str) -> None:
     if not os.path.isdir(path):
-        raise InstallError(f"未找到 Skill 路径：{path}")
+        raise InstallError(f"Skill path not found: {path}")
     skill_md = os.path.join(path, "SKILL.md")
     if not os.path.isfile(skill_md):
-        raise InstallError("所选 skill 目录中缺少 SKILL.md。")
+        raise InstallError("Selected skill directory is missing SKILL.md.")
 
 
 def _copy_skill(src: str, dest_dir: str) -> None:
     os.makedirs(os.path.dirname(dest_dir), exist_ok=True)
     if os.path.exists(dest_dir):
-        raise InstallError(f"目标目录已存在：{dest_dir}")
+        raise InstallError(f"Target directory already exists: {dest_dir}")
     shutil.copytree(src, dest_dir)
 
 
@@ -213,7 +213,7 @@ def _prepare_repo(source: Source, method: str, tmp_dir: str) -> str:
         except InstallError:
             repo_url = _build_repo_ssh(source.owner, source.repo)
             return _git_sparse_checkout(repo_url, source.ref, source.paths, tmp_dir)
-    raise InstallError("不支持的下载方式。")
+    raise InstallError("Unsupported download method.")
 
 
 def _resolve_source(args: Args) -> Source:
@@ -226,11 +226,11 @@ def _resolve_source(args: Args) -> Source:
         else:
             paths = []
         if not paths:
-            raise InstallError("使用 GitHub 链接时缺少 --path 参数。")
+            raise InstallError("Missing --path when using a GitHub URL.")
         return Source(owner=owner, repo=repo, ref=ref, paths=paths)
 
     if not args.repo:
-        raise InstallError("请提供 --repo 或 --url。")
+        raise InstallError("Please provide --repo or --url.")
     if "://" in args.repo:
         return _resolve_source(
             Args(url=args.repo, repo=None, path=args.path, ref=args.ref)
@@ -238,9 +238,9 @@ def _resolve_source(args: Args) -> Source:
 
     repo_parts = [p for p in args.repo.split("/") if p]
     if len(repo_parts) != 2:
-        raise InstallError("--repo 必须使用 owner/repo 格式。")
+        raise InstallError("--repo must use the owner/repo format.")
     if not args.path:
-        raise InstallError("使用 --repo 时必须提供 --path。")
+        raise InstallError("--path is required when using --repo.")
     paths = list(args.path)
     return Source(
         owner=repo_parts[0],
@@ -255,18 +255,18 @@ def _default_dest() -> str:
 
 
 def _parse_args(argv: list[str]) -> Args:
-    parser = argparse.ArgumentParser(description="从 GitHub 安装 skill。")
+    parser = argparse.ArgumentParser(description="Install a skill from GitHub.")
     parser.add_argument("--repo", help="owner/repo")
     parser.add_argument("--url", help="https://github.com/owner/repo[/tree/ref/path]")
     parser.add_argument(
         "--path",
         nargs="+",
-        help="仓库内的 skill 路径，可传多个",
+        help="Skill path inside the repository; can be provided multiple times",
     )
     parser.add_argument("--ref", default=DEFAULT_REF)
-    parser.add_argument("--dest", help="目标 skills 根目录，默认自动定位当前 WesleyCode 应用的 skills 目录")
+    parser.add_argument("--dest", help="Target skills root directory; defaults to the current WesleyCode skills directory")
     parser.add_argument(
-        "--name", help="目标 skill 名称（默认取路径最后一段）"
+        "--name", help="Target skill name (defaults to the last path segment)"
     )
     parser.add_argument(
         "--method",
@@ -282,7 +282,7 @@ def main(argv: list[str]) -> int:
         source = _resolve_source(args)
         source.ref = source.ref or args.ref
         if not source.paths:
-            raise InstallError("未提供任何 skill 路径。")
+            raise InstallError("No skill paths were provided.")
         for path in source.paths:
             _validate_relative_path(path)
         dest_root = args.dest or _default_dest()
@@ -295,10 +295,10 @@ def main(argv: list[str]) -> int:
                 skill_name = skill_name or os.path.basename(path.rstrip("/"))
                 _validate_skill_name(skill_name)
                 if not skill_name:
-                    raise InstallError("无法推导 skill 名称。")
+                    raise InstallError("Unable to infer skill name.")
                 dest_dir = os.path.join(dest_root, skill_name)
                 if os.path.exists(dest_dir):
-                    raise InstallError(f"目标目录已存在：{dest_dir}")
+                    raise InstallError(f"Target directory already exists: {dest_dir}")
                 skill_src = os.path.join(repo_root, path)
                 _validate_skill(skill_src)
                 _copy_skill(skill_src, dest_dir)
@@ -307,10 +307,10 @@ def main(argv: list[str]) -> int:
             if os.path.isdir(tmp_dir):
                 shutil.rmtree(tmp_dir, ignore_errors=True)
         for skill_name, dest_dir in installed:
-            print(f"已安装 {skill_name} 到 {dest_dir}")
+            print(f"Installed {skill_name} to {dest_dir}")
         return 0
     except InstallError as exc:
-        print(f"错误：{exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
 
