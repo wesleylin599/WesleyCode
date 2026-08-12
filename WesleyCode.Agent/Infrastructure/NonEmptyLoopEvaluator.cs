@@ -15,9 +15,9 @@ public sealed class NonEmptyLoopEvaluator : LoopEvaluator
             return new ValueTask<LoopEvaluation>(ContinueWithAssistant("继续处理请求,消息不能为空。"));
         }
 
-        if (message.Contents.OfType<TextContent>().LastOrDefault() is TextContent textConten && string.IsNullOrEmpty(textConten.Text))
+        if (message.Contents.OfType<TextContent>().LastOrDefault() is TextContent textContent && string.IsNullOrEmpty(textContent.Text))
         {
-            return new ValueTask<LoopEvaluation>(ContinueWithAssistant("继续处理请求,完成任务后回复文本消息不能为空。"));
+            return new ValueTask<LoopEvaluation>(ContinueWithAssistant("继续处理请求,回复的文本消息不能为空。"));
         }
 
         return new ValueTask<LoopEvaluation>(LoopEvaluation.Stop());

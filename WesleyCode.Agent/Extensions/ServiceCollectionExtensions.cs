@@ -58,7 +58,7 @@ public static class ServiceCollectionExtensions
         builder.Use(innerAgent => new OutputAgent(innerAgent, capture));
 
     public static AIAgentBuilder UseLoop(this AIAgentBuilder builder) =>
-        builder.Use(innerAgent => new LoopAgent(innerAgent, new NonEmptyLoopEvaluator()));
+        builder.Use(innerAgent => new LoopAgent(innerAgent, new NonEmptyLoopEvaluator(), new LoopAgentOptions { OnBehalfOfAuthorName = "loop" }));
 
     public static IHttpClientBuilder ConfigureHttpClientAgents(this IServiceCollection services, Action<HttpClient> configureClient) =>
         services.AddHttpClient(AgentHttpClientName).ConfigureHttpClient(configureClient);

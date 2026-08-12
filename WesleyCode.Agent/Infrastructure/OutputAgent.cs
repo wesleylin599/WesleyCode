@@ -27,14 +27,27 @@ public sealed class OutputAgent : DelegatingAIAgent
         var response = await base.RunCoreAsync(messages, session, options, cancellationToken);
         foreach (var message in response.Messages)
         {
-            foreach (var content in message.Contents)
-            {
-                if (content is TextContent textContent && !string.IsNullOrEmpty(textContent.Text))
-                {
-                    _capture.WriteAgentMessage(textContent.Text);
-                }
+            cancellationToken.ThrowIfCancellationRequested();
 
-                _capture.CommonWriteMessage(message.AuthorName, content);
+            if (message.Role == ChatRole.User && !string.IsNullOrEmpty(message.Text))
+            {
+                _capture.WriteUserMessage(message.Text);
+            }
+            else if (message.Role == ChatRole.System && !string.IsNullOrEmpty(message.Text))
+            {
+                _capture.WriteSystemMessage(message.Text);
+            }
+            else
+            {
+                foreach (var content in message.Contents)
+                {
+                    if (content is TextContent textContent && !string.IsNullOrEmpty(textContent.Text))
+                    {
+                        _capture.WriteAgentMessage(textContent.Text);
+                    }
+
+                    _capture.CommonWriteMessage(message.AuthorName, content);
+                }
             }
         }
         return response;
@@ -59,18 +72,29 @@ public sealed class OutputAgent : DelegatingAIAgent
                 false => new(ChatRole.Assistant, [new ContinueContent()]),
                 true => enumerator.Current,
             };
-            foreach (var content in responseUpdate.Contents)
+            if (responseUpdate.Role == ChatRole.User && !string.IsNullOrEmpty(responseUpdate.Text))
             {
-                if (content is TextContent textContent)
+                _capture.WriteUserMessage(responseUpdate.Text);
+            }
+            else if (responseUpdate.Role == ChatRole.System && !string.IsNullOrEmpty(responseUpdate.Text))
+            {
+                _capture.WriteSystemMessage(responseUpdate.Text);
+            }
+            else
+            {
+                foreach (var content in responseUpdate.Contents)
                 {
-                    currentBuilder.Append(textContent.Text);
+                    if (content is TextContent textContent)
+                    {
+                        currentBuilder.Append(textContent.Text);
+                    }
+                    else if (currentBuilder.Length > 0)
+                    {
+                        _capture.WriteAgentMessage(currentBuilder.ToString());
+                        currentBuilder.Clear();
+                    }
+                    _capture.CommonWriteMessage(responseUpdate.AuthorName, content);
                 }
-                else if (currentBuilder.Length > 0)
-                {
-                    _capture.WriteAgentMessage(currentBuilder.ToString());
-                    currentBuilder.Clear();
-                }
-                _capture.CommonWriteMessage(responseUpdate.AuthorName, content);
             }
             yield return responseUpdate;
         }
