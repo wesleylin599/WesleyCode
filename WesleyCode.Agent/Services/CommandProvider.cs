@@ -12,7 +12,7 @@ namespace WesleyCode.Agent.Services;
 
 internal sealed class CommandProvider : AIContextProvider
 {
-    private static readonly ShellFamily family = OperatingSystem.IsWindows() ? ShellFamily.PowerShell : ShellFamily.Bash;
+    private static readonly CommandFamily family = OperatingSystem.IsWindows() ? CommandFamily.PowerShell : CommandFamily.Bash;
 
     private readonly IOptions<WorkingOptions> _options;
 
@@ -47,8 +47,8 @@ internal sealed class CommandProvider : AIContextProvider
 
             List<string> arguments = family switch
             {
-                ShellFamily.Bash => ["--noprofile", "--norc", "-c", command],
-                ShellFamily.PowerShell => ["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", command],
+                CommandFamily.Bash => ["--noprofile", "--norc", "-c", command],
+                CommandFamily.PowerShell => ["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", command],
                 _ => throw new InvalidOperationException($"Unsupported shell: {family}"),
             };
 
@@ -80,12 +80,12 @@ internal sealed class CommandProvider : AIContextProvider
         return output;
     }
 
-    private static string DefaultInstructionsFormatter(ShellFamily family, string working)
+    private static string DefaultInstructionsFormatter(CommandFamily family, string working)
     {
         var sb = new StringBuilder();
         _ = sb.AppendLine("## Command environment");
 
-        if (family == ShellFamily.PowerShell)
+        if (family == CommandFamily.PowerShell)
         {
             _ = sb.Append("你正在使用 PowerShell。");
             _ = sb.AppendLine("请使用 PowerShell 语法，而不是 bash：");
@@ -97,8 +97,8 @@ internal sealed class CommandProvider : AIContextProvider
         }
         else
         {
-            _ = sb.Append("你正在使用 POSIX Shell。");
-            _ = sb.AppendLine("请使用 POSIX Shell 语法（bash/sh）。");
+            _ = sb.Append("你正在使用 Bash。");
+            _ = sb.AppendLine("请使用 Bash 语法。");
             _ = sb.AppendLine("- 使用 `export NAME=value` 为后续命令设置环境变量。");
             _ = sb.AppendLine("- 使用 `$NAME` 或 `${NAME}` 引用环境变量。");
             _ = sb.AppendLine("- 路径使用 `/` 作为分隔符。");
@@ -122,7 +122,7 @@ internal sealed class CommandProvider : AIContextProvider
         public string Error { get; set; } = string.Empty;
     }
 
-    private enum ShellFamily
+    private enum CommandFamily
     {
         PowerShell,
         Bash,
