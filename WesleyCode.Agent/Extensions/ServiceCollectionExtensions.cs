@@ -37,6 +37,18 @@ public static class ServiceCollectionExtensions
 
     public static string ComputeMd5(this string target) => Convert.ToHexString(MD5.HashData(Encoding.Default.GetBytes(target))).ToLowerInvariant();
 
+    public static ChatMessage WithMessageId(this ChatMessage message, string messageId)
+    {
+        if (message.MessageId != null && message.MessageId == messageId)
+        {
+            return message;
+        }
+
+        message = message.Clone();
+        message.MessageId = messageId;
+        return message;
+    }
+
     public static void CommonWriteMessage(this IOutputCapture capture, string? author, AIContent content)
     {
         if (content is ErrorContent errorContent)
@@ -113,8 +125,17 @@ public static class ServiceCollectionExtensions
         services.AddTransient<AIContextProvider, FileSkillsProvider>();
         services.AddTransient<AIContextProvider, SystemPromptProvider>();
 
+        // 上下文压缩 Provider
+        services.AddTransient<AIContextProvider>(provider => new CompactionProvider(
+            new TruncationCompactionStrategy(
+                trigger: CompactionTriggers.Any(CompactionTriggers.GroupsExceed(100), CompactionTriggers.TokensExceed(50000)),
+                minimumPreservedGroups: 32,
+                target: CompactionTriggers.TokensBelow(20000)
+            )
+        ));
+
         // Todo Provider（禁用列表消息）
-        services.AddTransient<AIContextProvider>(provider => new TodoProvider(new TodoProviderOptions { SuppressTodoListMessage = true }));
+        services.AddTransient<AIContextProvider>(provider => new TodoProvider());
 
         // Agent 模式 Provider
         services.AddTransient<AIContextProvider>(provider => new AgentModeProvider(
@@ -130,15 +151,6 @@ public static class ServiceCollectionExtensions
         services.AddTransient<AIContextProvider>(provider => new FileAccessProvider(
             new FileSystemAgentFileStore(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath),
             new FileAccessProviderOptions { DisableReadOnlyToolApproval = true, DisableWriteToolApproval = true }
-        ));
-
-        // 上下文压缩 Provider
-        services.AddTransient<AIContextProvider>(provider => new CompactionProvider(
-            new TruncationCompactionStrategy(
-                trigger: CompactionTriggers.Any(CompactionTriggers.GroupsExceed(100), CompactionTriggers.TokensExceed(50000)),
-                minimumPreservedGroups: 32,
-                target: CompactionTriggers.TokensBelow(20000)
-            )
         ));
 
         // 技能执行 Provider（禁用审批）

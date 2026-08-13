@@ -33,7 +33,9 @@ internal class AgentRunner : IAgentRunner
         _agent.DeserializeSessionAsync(serializedState, cancellationToken: cancellationToken);
 
     public Task<AgentResponse> ExecuteAsync(List<ChatMessage> input, AgentSession session, CancellationToken cancellationToken = default) =>
-        _agent.RunStreamingAsync(input, session, cancellationToken: cancellationToken).ToAgentResponseAsync(cancellationToken);
+        _agent
+            .RunStreamingAsync(input.Select(x => x.WithMessageId(Guid.NewGuid().ToString())), session, cancellationToken: cancellationToken)
+            .ToAgentResponseAsync(cancellationToken);
 
     public Task RestartSessionAsync(AgentSession activeSession, CancellationToken cancellationToken = default)
     {
@@ -81,10 +83,10 @@ internal class AgentRunner : IAgentRunner
                 {
                     StorageInputRequestMessageFilter = messages =>
                     {
-                        var typeMessages = messages.Where(m => m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory);
-                        return typeMessages.Any()
-                            ? typeMessages
-                            : messages.Where(m => m.GetAgentRequestMessageSourceId() != typeof(InMemoryChatHistoryProvider).FullName);
+                        return messages.Where(m =>
+                            m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.ChatHistory
+                            && m.GetAgentRequestMessageSourceType() != AgentRequestMessageSourceType.AIContextProvider
+                        );
                     },
                     StorageInputResponseMessageFilter = messages => messages,
                 }
@@ -92,5 +94,5 @@ internal class AgentRunner : IAgentRunner
         };
 
     private static ToolApprovalAgentOptions BuildToolApprovalAgentOptions() =>
-        new ToolApprovalAgentOptions() { AutoApprovalRules = [context => ValueTask.FromResult(true)] };
+        new ToolApprovalAgentOptions() { AutoApprovalRules = [static context => ValueTask.FromResult(true)] };
 }
