@@ -70,7 +70,11 @@ public static class ServiceCollectionExtensions
         builder.Use(innerAgent => new OutputAgent(innerAgent, capture));
 
     public static AIAgentBuilder UseLoop(this AIAgentBuilder builder) =>
-        builder.Use(innerAgent => new LoopAgent(innerAgent, new NonEmptyLoopEvaluator(), new LoopAgentOptions { OnBehalfOfAuthorName = "loop" }));
+        builder.Use(innerAgent => new LoopAgent(
+            innerAgent,
+            new NonEmptyLoopEvaluator(),
+            new LoopAgentOptions { OnBehalfOfAuthorName = "loop", ExcludeOnBehalfOfMessages = true }
+        ));
 
     public static IHttpClientBuilder ConfigureHttpClientAgents(this IServiceCollection services, Action<HttpClient> configureClient) =>
         services.AddHttpClient(AgentHttpClientName).ConfigureHttpClient(configureClient);
@@ -143,9 +147,7 @@ public static class ServiceCollectionExtensions
         ));
 
         // Memory Provider
-        services.AddTransient<AIContextProvider>(provider => new FileMemoryProvider(
-            new FileSystemAgentFileStore(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath)
-        ));
+        services.AddTransient<AIContextProvider>(provider => new FileMemoryProvider(new InMemoryAgentFileStore()));
 
         // File Access Provider
         services.AddTransient<AIContextProvider>(provider => new FileAccessProvider(
