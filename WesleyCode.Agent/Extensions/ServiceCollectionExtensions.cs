@@ -30,12 +30,12 @@ public static class ServiceCollectionExtensions
 
         var result = CharsetDetector.DetectFromBytes(bytes);
 
-        var encoding = result.Detected?.Encoding ?? Encoding.Default;
+        var encoding = result.Detected?.Encoding ?? Encoding.UTF8;
 
         return encoding.GetString(bytes).TrimEnd();
     }
 
-    public static string ComputeMd5(this string target) => Convert.ToHexString(MD5.HashData(Encoding.Default.GetBytes(target))).ToLowerInvariant();
+    public static string ComputeMd5(this string target) => Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(target))).ToLowerInvariant();
 
     public static ChatMessage WithMessageId(this ChatMessage message, string messageId)
     {

@@ -1,6 +1,8 @@
 ﻿using System.ClientModel;
 using System.ClientModel.Primitives;
 using Anthropic;
+using DeepSeek.Core;
+using DeepSeek.Core.Adapters;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
 using OpenAI;
@@ -16,10 +18,13 @@ internal static class ChatClientFactory
         return options.Provider switch
         {
             "anthropic" => CreateAnthropicChatClient(options, httpClient),
+            "deepseek" => CreateDeepSeekChatClient(options, httpClient),
             "ollama" => CreateOllamaChatClient(options, httpClient),
             "openai" => CreateOpenAiChatClient(options, httpClient),
             "crs" => CreateCrsChatClient(options, httpClient),
-            _ => throw new InvalidOperationException($"不支持的 IChatClient Provider: {options.Provider}。可选值: openai、anthropic、crs、ollama。"),
+            _ => throw new InvalidOperationException(
+                $"不支持的 IChatClient Provider: {options.Provider}。可选值: openai、anthropic、deepseek、vllm、crs、ollama。"
+            ),
         };
     }
 
@@ -30,11 +35,7 @@ internal static class ChatClientFactory
         if (string.IsNullOrWhiteSpace(options.ApiKey))
             throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
 
-        var clientOptions = new OpenAIClientOptions
-        {
-            NetworkTimeout = Timeout.InfiniteTimeSpan,
-            Transport = new HttpClientPipelineTransport(httpClient),
-        };
+        var clientOptions = new OpenAIClientOptions { Transport = new HttpClientPipelineTransport(httpClient) };
 
         if (GetEndpoint(options.BaseUrl) is Uri endpoint)
             clientOptions.Endpoint = endpoint;
@@ -47,24 +48,32 @@ internal static class ChatClientFactory
         if (string.IsNullOrWhiteSpace(options.ApiKey))
             throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
 
-        var endpoint = GetEndpoint(options.BaseUrl);
-
-        IAnthropicClient client;
-        if (endpoint is null)
+        IAnthropicClient client = options.BaseUrl switch
         {
-            client = new AnthropicClient { ApiKey = options.ApiKey, HttpClient = httpClient };
-        }
-        else
-        {
-            client = new AnthropicClient
+            null => new AnthropicClient { ApiKey = options.ApiKey, HttpClient = httpClient },
+            not null => new AnthropicClient
             {
                 ApiKey = options.ApiKey,
-                BaseUrl = endpoint.ToString().TrimEnd('/'),
+                BaseUrl = options.BaseUrl,
                 HttpClient = httpClient,
-            };
-        }
+            },
+        };
 
         return client.AsIChatClient(options.ModelId);
+    }
+
+    private static IChatClient CreateDeepSeekChatClient(ChatClientOptions options, HttpClient httpClient)
+    {
+        if (string.IsNullOrWhiteSpace(options.ModelId))
+            throw new InvalidOperationException("未配置 Model Id，请设置 WESLEY_MODELID。");
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+            throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
+
+        if (GetEndpoint(options.BaseUrl) is Uri endpoint)
+            httpClient.BaseAddress = endpoint;
+
+        var deepSeekClient = new DeepSeekResponsesChatClient(new DeepSeekClient(httpClient, options.ApiKey));
+        return new DefaultModelIdChatClient(deepSeekClient, options.ModelId);
     }
 
     private static OllamaApiClient CreateOllamaChatClient(ChatClientOptions options, HttpClient httpClient)
@@ -86,11 +95,7 @@ internal static class ChatClientFactory
         if (string.IsNullOrWhiteSpace(options.ApiKey))
             throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
 
-        var clientOptions = new OpenAIClientOptions
-        {
-            NetworkTimeout = Timeout.InfiniteTimeSpan,
-            Transport = new HttpClientPipelineTransport(httpClient),
-        };
+        var clientOptions = new OpenAIClientOptions { Transport = new HttpClientPipelineTransport(httpClient) };
 
         if (GetEndpoint(options.BaseUrl) is Uri endpoint)
             clientOptions.Endpoint = endpoint;
@@ -102,6 +107,9 @@ internal static class ChatClientFactory
     {
         if (string.IsNullOrWhiteSpace(baseUrl))
             return null;
+
+        if (!baseUrl.EndsWith('/'))
+            baseUrl = baseUrl + '/';
 
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var endpoint))
             throw new InvalidOperationException($"BaseUrl 配置无效: {baseUrl}");
