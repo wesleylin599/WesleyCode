@@ -66,10 +66,10 @@ public static class ServiceCollectionExtensions
         }
     }
 
-    public static AIAgentBuilder UseOutput(this AIAgentBuilder builder, IOutputCapture capture) =>
+    public static AIAgentBuilder UseAgentOutput(this AIAgentBuilder builder, IOutputCapture capture) =>
         builder.Use(innerAgent => new OutputAgent(innerAgent, capture));
 
-    public static AIAgentBuilder UseLoop(this AIAgentBuilder builder) =>
+    public static AIAgentBuilder UseAgentLoop(this AIAgentBuilder builder) =>
         builder.Use(innerAgent => new LoopAgent(
             innerAgent,
             new NonEmptyLoopEvaluator(),
@@ -147,7 +147,9 @@ public static class ServiceCollectionExtensions
         ));
 
         // Memory Provider
-        services.AddTransient<AIContextProvider>(provider => new FileMemoryProvider(new InMemoryAgentFileStore()));
+        services.AddTransient<AIContextProvider>(provider => new FileMemoryProvider(
+            new FileSystemAgentFileStore(provider.GetRequiredService<IOptions<WorkingOptions>>().Value.BasePath)
+        ));
 
         // File Access Provider
         services.AddTransient<AIContextProvider>(provider => new FileAccessProvider(

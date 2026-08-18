@@ -17,9 +17,9 @@ internal class AgentRunner : IAgentRunner
         this._agent = client
             .AsAIAgent(BuildChatClientAgentOptions(options, providers))
             .AsBuilder()
+            .UseAgentLoop()
+            .UseAgentOutput(capture)
             .UseToolApproval(BuildToolApprovalAgentOptions())
-            .UseOutput(capture)
-            .UseLoop()
             .Build();
         this._capture = capture;
     }

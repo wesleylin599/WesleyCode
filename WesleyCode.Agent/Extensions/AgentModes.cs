@@ -4,12 +4,14 @@ namespace WesleyCode.Agent.Extensions;
 
 internal static class AgentModes
 {
-    public static readonly string DefaultMode = "plan";
+    public static readonly string Plan = "plan";
+    public static readonly string Execute = "execute";
+    public static readonly string DefaultMode = Plan;
     public static readonly AgentModeProviderOptions.AgentMode[] Modes =
     [
         new(
-            "plan",
-            """
+            Plan,
+            $"""
             在分析需求、拆解任务和制定计划时，请使用此模式。这是一种交互式模式——在继续下一步之前，你需要提出澄清问题、讨论各种方案并获得用户的批准。
 
             处于"计划模式"时应遵循的流程：
@@ -22,13 +24,13 @@ internal static class AgentModes
              3.在获得所有必要的澄清信息之前，不要继续进行后续步骤。  
              4.如果进行简短的探索性研究有助于向用户提出合理的澄清问题，则可以进行此类研究。 
             5. 将计划写入内存文件，以确保即使发生压缩（compaction）操作，计划也能得以保留。如果用户要求更改，请务必更新该计划文件。
-            6.使用 `mode_set` 工具切换到"execute"  
-            7.遵循"execute"下的步骤实施该计划。 
+            6.使用 `mode_set` 工具切换到"{Execute}"  
+            7.遵循"{Execute}"下的步骤实施该计划。 
 
             """
         ),
         new(
-            "execute",
+            Execute,
             """
             确定请求的类型：
             1. 无需额外工作即可回答的简单问题。 
@@ -42,31 +44,6 @@ internal static class AgentModes
             3. 若在执行过程中遇到歧义或意外情况，请选择最合理的方案，记录下您的选择，然后继续进行。 
             4. 任务完成后，将其标记为"已完成"。 
             5. 持续工作、思考并调用工具，直至得出可交付给用户的研究结果。
-            6. 使用 `mode_set` 工具切换到"validate"  
-            7. 遵循"validate"下的步骤验证执行结果。 
-            s
-            """
-        ),
-        new(
-            "validate",
-            """
-            验证已完成执行结果是否符合原始需求的任务。
-
-            遵循以下流程：
-
-            1. 理解原始需求和 execute 阶段的执行结果。
-            2. 对照原始需求逐项验证执行结果：
-               - 是否完成所有需求。
-               - 是否存在遗漏。
-               - 是否满足所有约束条件。
-               - 是否存在逻辑错误、事实错误或明显缺陷。
-            3. 若发现未明确验证的内容，应明确标记为"未验证"，不要进行猜测。
-            4. 若验证过程中发现问题，应记录问题及其影响，不进行修复。
-            5. 根据验证结果作出结论：
-               - 若验证失败，使用 `mode_set` 工具切换到"execute"，并说明需要修正的问题。
-               - 若验证通过，遵循以下流程执行。
-               1. 总结操作内容，内容需要尽量精简。
-               2. 输出操作总结。
             """
         ),
     ];
