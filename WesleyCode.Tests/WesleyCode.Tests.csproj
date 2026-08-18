@@ -4,6 +4,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
+        <NoWarn>MAAI001;MEAI001;OPENAI001</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

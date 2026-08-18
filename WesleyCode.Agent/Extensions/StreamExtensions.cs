@@ -8,6 +8,11 @@ namespace WesleyCode.Agent.Extensions;
 /// </summary>
 public static class StreamExtensions
 {
+    static StreamExtensions()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
     /// <summary>
     /// 自动检测字符编码并将流内容解码为字符串（去除尾部空白）。
     /// </summary>
@@ -17,8 +22,6 @@ public static class StreamExtensions
 
         if (bytes.Length == 0)
             return string.Empty;
-
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
         var result = CharsetDetector.DetectFromBytes(bytes);
 

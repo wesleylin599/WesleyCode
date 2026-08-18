@@ -101,7 +101,6 @@ internal sealed class ConsoleAgentHostedService : BackgroundService
         {
             try
             {
-                await Task.Delay(100, stoppingToken);
                 _outputCapture.WriteUserTitle();
                 var input = await _prompt.ReadLineAsync();
                 if (!input.IsSuccess)

@@ -10,11 +10,13 @@ internal sealed class FileSkillsProvider : AIContextProvider
 {
     private readonly string _skillsRoot;
     private readonly AgentFileStore _store;
+    private readonly AIFunction[] _tools;
 
     public FileSkillsProvider(IOptions<SkillOptions> options)
     {
         _skillsRoot = options.Value.SkillPath;
         _store = new FileSystemAgentFileStore(_skillsRoot);
+        _tools = CreateTools();
     }
 
     protected override ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default) =>
@@ -32,7 +34,7 @@ internal sealed class FileSkillsProvider : AIContextProvider
                 所有文件路径都必须相对于该 skills 根目录，不要使用绝对路径。
                 当需要创建或修改 skill 时，使用这些工具。
                 """,
-                Tools = CreateTools(),
+                Tools = _tools,
             }
         );
 
