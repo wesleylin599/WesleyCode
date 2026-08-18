@@ -33,9 +33,15 @@ public sealed class WebOutputState : IWebOutputCaptureState
         ChannelChanged?.Invoke(channelId);
     }
 
-    public void AddUserMessage(string channelId, string message) => this.AddMessage(channelId, ChatRole.User, "你", message);
+    public void RemoveChannel(string channelId)
+    {
+        _channels.TryRemove(channelId, out _);
+        ChannelChanged?.Invoke(channelId);
+    }
 
-    public void AddSystemMessage(string channelId, string message) => this.AddMessage(channelId, ChatRole.System, "系统", message);
+    public void AddUserMessage(string channelId, string message) => this.AddMessage(channelId, ChatRole.User, ChatAuthorNames.User, message);
+
+    public void AddSystemMessage(string channelId, string message) => this.AddMessage(channelId, ChatRole.System, ChatAuthorNames.System, message);
 
     public void AddCurrentMessage(ChatRole role, string authorName, string message) =>
         this.AddMessage(_currentChannel.Value ?? "global", role, authorName, message);

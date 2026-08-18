@@ -23,21 +23,21 @@ public sealed class WebOutputCapture : IOutputCapture
 
     public void WriteUserTitle() { }
 
-    public void WriteUserMessage(string message) => _state.AddCurrentMessage(ChatRole.User, "你", message);
+    public void WriteUserMessage(string message) => _state.AddCurrentMessage(ChatRole.User, ChatAuthorNames.User, message);
 
-    public void WriteAgentMessage(string message) => _state.AddCurrentMessage(ChatRole.Assistant, "WesleyCode", message);
+    public void WriteAgentMessage(string message) => _state.AddCurrentMessage(ChatRole.Assistant, ChatAuthorNames.Assistant, message);
 
-    public void WriteSystemMessage(string message) => _state.AddCurrentMessage(ChatRole.System, "系统", message);
+    public void WriteSystemMessage(string message) => _state.AddCurrentMessage(ChatRole.System, ChatAuthorNames.System, message);
 
     public void WriteToolCall(string callId, string? target, string toolName, IDictionary<string, object?>? arguments)
     {
-        var title = $"{target ?? "unknow"} - {callId} - {toolName}";
+        var title = $"{target ?? "unknown"} - {callId} - {toolName}";
         _state.AddCurrentMessage(ChatRole.Tool, title, JsonSerializer.Serialize(arguments, JsonOptions));
     }
 
     public void WriteToolResult(string callId, string? target, object? result)
     {
-        var title = $"{target ?? "unknow"} - {callId} - result";
+        var title = $"{target ?? "unknown"} - {callId} - result";
         _state.AddCurrentMessage(ChatRole.Tool, title, JsonSerializer.Serialize(result, JsonOptions));
     }
 }

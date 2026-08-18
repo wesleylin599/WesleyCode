@@ -30,10 +30,10 @@ internal class ConsoleOutputCapture : IOutputCapture
     public void WriteSystemMessage(string message) => WriteBlock("System", message, Color.Fuchsia, Color.Silver);
 
     public void WriteToolCall(string callId, string? target, string toolName, IDictionary<string, object?>? arguments) =>
-        WriteBlock($"[{callId}] {target ?? "unknow"}:{toolName}", TruncateLine(arguments), Color.Olive, Color.Grey);
+        WriteBlock($"[{callId}] {target ?? "unknown"}:{toolName}", TruncateLine(arguments), Color.Olive, Color.Grey);
 
     public void WriteToolResult(string callId, string? target, object? result) =>
-        WriteBlock($"[{callId}] {target ?? "unknow"}:result", TruncateLine(result), Color.Navy, Color.Grey);
+        WriteBlock($"[{callId}] {target ?? "unknown"}:result", TruncateLine(result), Color.Navy, Color.Grey);
 
     private static void WriteBlock(string title, string message, Color titleColor, Color contentColor)
     {

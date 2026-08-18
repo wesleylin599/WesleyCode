@@ -56,7 +56,7 @@ public static class ServiceCollectionExtensions
 
         services.AddOptions<ChatOptions>().BindConfiguration("ChatClient");
 
-        services.AddTransient<ISessionStore, SessionStore>();
+        services.AddSingleton<ISessionStore, SessionStore>();
         services.AddSingleton<IAgentRunner, AgentRunner>();
 
         services.RegisterAIProviders();

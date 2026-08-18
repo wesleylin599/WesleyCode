@@ -203,6 +203,7 @@ public sealed class ChatWorkspaceService : IDisposable
     public void Dispose()
     {
         _outputState.ChannelChanged -= OnChannelChanged;
+        _outputState.RemoveChannel(_channelId);
         if (_workspaceWatcher is not null)
         {
             _workspaceWatcher.Created -= OnWorkspaceFilesChanged;

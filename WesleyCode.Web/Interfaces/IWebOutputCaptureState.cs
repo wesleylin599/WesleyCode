@@ -12,6 +12,8 @@ public interface IWebOutputCaptureState
 
     void Reset(string channelId);
 
+    void RemoveChannel(string channelId);
+
     void AddUserMessage(string channelId, string message);
 
     void AddSystemMessage(string channelId, string message);
