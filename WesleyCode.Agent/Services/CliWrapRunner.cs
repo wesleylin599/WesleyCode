@@ -96,9 +96,46 @@ internal static class CliWrapRunner
             || string.Equals(extension, ".csx", StringComparison.OrdinalIgnoreCase)
         )
         {
-            return ("dotnet", ["run", scriptPath, .. arguments]);
+            return BuildCsCommand(scriptPath, arguments);
         }
 
         throw new InvalidOperationException($"不支持的脚本类型: {extension}，请使用 .py, .js, .mjs, .cjs, .cs, .csx");
+    }
+
+    private static (string CommandPath, IReadOnlyList<string> Arguments) BuildCsCommand(string scriptPath, IReadOnlyList<string> arguments)
+    {
+        var projectFile = FindNearestProjectFile(Path.GetDirectoryName(scriptPath));
+
+        if (projectFile is null)
+        {
+            throw new InvalidOperationException(
+                $"C# 脚本 {Path.GetFileName(scriptPath)} 需要在所属项目（.csproj）上下文中运行，但未找到项目文件。请将脚本放入含 .csproj 的目录中。"
+            );
+        }
+
+        // dotnet run --project <csproj> -- <scriptPath> <args...>
+        return ("dotnet", ["run", "--project", projectFile, "--", scriptPath, .. arguments]);
+    }
+
+    private static string? FindNearestProjectFile(string? startDirectory)
+    {
+        var current = startDirectory;
+        while (!string.IsNullOrEmpty(current) && Directory.Exists(current))
+        {
+            var projectFile = Directory.EnumerateFiles(current, "*.csproj", SearchOption.TopDirectoryOnly).FirstOrDefault();
+            if (projectFile is not null)
+            {
+                return projectFile;
+            }
+
+            var parent = Directory.GetParent(current);
+            if (parent is null)
+            {
+                break;
+            }
+            current = parent.FullName;
+        }
+
+        return null;
     }
 }

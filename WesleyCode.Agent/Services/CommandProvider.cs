@@ -14,6 +14,9 @@ internal sealed class CommandProvider : AIContextProvider
 {
     private static readonly CommandFamily family = OperatingSystem.IsWindows() ? CommandFamily.PowerShell : CommandFamily.Bash;
 
+    private const int DefaultTimeoutSeconds = 300;
+    private const int MaxTimeoutSeconds = 3600;
+
     private readonly IOptions<WorkingOptions> _options;
 
     public CommandProvider(IOptions<WorkingOptions> options)
@@ -35,7 +38,7 @@ internal sealed class CommandProvider : AIContextProvider
 
     private async Task<CommandRunResult> CommandRunAsync(
         [Description("命令行")] string command,
-        [Description("执行超时时间/秒")] int timeout,
+        [Description("执行超时时间（秒）")] int timeout,
         CancellationToken cancellationToken = default
     )
     {
@@ -52,7 +55,7 @@ internal sealed class CommandProvider : AIContextProvider
                 _ => throw new InvalidOperationException($"Unsupported shell: {family}"),
             };
 
-            var timeoutSeconds = timeout <= 0 ? 300 : Math.Min(timeout, 3600);
+            var timeoutSeconds = timeout <= 0 ? DefaultTimeoutSeconds : Math.Min(timeout, MaxTimeoutSeconds);
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 

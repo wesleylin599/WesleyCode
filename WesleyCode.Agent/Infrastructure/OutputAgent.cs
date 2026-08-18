@@ -60,43 +60,51 @@ public sealed class OutputAgent : DelegatingAIAgent
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
-        bool currentMove = true;
-        StringBuilder currentBuilder = new();
-        await using IAsyncEnumerator<AgentResponseUpdate> enumerator = base.RunCoreStreamingAsync(messages, session, options, cancellationToken)
-            .GetAsyncEnumerator(cancellationToken);
-        while (currentMove)
+        var textBuffer = new StringBuilder();
+        await using var enumerator = base.RunCoreStreamingAsync(messages, session, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+
+        while (true)
         {
-            currentMove = await enumerator.MoveNextAsync();
-            AgentResponseUpdate responseUpdate = currentMove switch
+            if (!await enumerator.MoveNextAsync())
             {
-                false => new(ChatRole.Assistant, [new ContinueContent()]),
-                true => enumerator.Current,
-            };
-            if (responseUpdate.Role == ChatRole.User && !string.IsNullOrEmpty(responseUpdate.Text))
-            {
-                _capture.WriteUserMessage(responseUpdate.Text);
+                // 上游流结束：以 ContinueContent 哨兵作为收尾更新，确保循环评估器能感知完成。
+                var finalUpdate = new AgentResponseUpdate(ChatRole.Assistant, [new ContinueContent()]);
+                WriteUpdate(finalUpdate, textBuffer);
+                yield return finalUpdate;
+                break;
             }
-            else if (responseUpdate.Role == ChatRole.System && !string.IsNullOrEmpty(responseUpdate.Text))
+
+            var update = enumerator.Current;
+            WriteUpdate(update, textBuffer);
+            yield return update;
+        }
+    }
+
+    private void WriteUpdate(AgentResponseUpdate responseUpdate, StringBuilder textBuffer)
+    {
+        if (responseUpdate.Role == ChatRole.User && !string.IsNullOrEmpty(responseUpdate.Text))
+        {
+            _capture.WriteUserMessage(responseUpdate.Text);
+        }
+        else if (responseUpdate.Role == ChatRole.System && !string.IsNullOrEmpty(responseUpdate.Text))
+        {
+            _capture.WriteSystemMessage(responseUpdate.Text);
+        }
+        else
+        {
+            foreach (var content in responseUpdate.Contents)
             {
-                _capture.WriteSystemMessage(responseUpdate.Text);
-            }
-            else
-            {
-                foreach (var content in responseUpdate.Contents)
+                if (content is TextContent textContent)
                 {
-                    if (content is TextContent textContent)
-                    {
-                        currentBuilder.Append(textContent.Text);
-                    }
-                    else if (currentBuilder.Length > 0)
-                    {
-                        _capture.WriteAgentMessage(currentBuilder.ToString());
-                        currentBuilder.Clear();
-                    }
-                    _capture.CommonWriteMessage(responseUpdate.AuthorName, content);
+                    textBuffer.Append(textContent.Text);
                 }
+                else if (textBuffer.Length > 0)
+                {
+                    _capture.WriteAgentMessage(textBuffer.ToString());
+                    textBuffer.Clear();
+                }
+                _capture.CommonWriteMessage(responseUpdate.AuthorName, content);
             }
-            yield return responseUpdate;
         }
     }
 }

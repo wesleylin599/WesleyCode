@@ -371,3 +371,5 @@ _work/
 artifacts/
 .codex/
 appsettings.*.json
+# Backup files
+*.bak

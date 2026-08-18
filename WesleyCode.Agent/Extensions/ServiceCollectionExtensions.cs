@@ -1,13 +1,10 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using Microsoft.Agents.AI;
+﻿using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenAI;
-using UtfUnknown;
 using WesleyCode.Agent.Infrastructure;
 using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
@@ -15,66 +12,12 @@ using WesleyCode.Agent.Services;
 
 namespace WesleyCode.Agent.Extensions;
 
+/// <summary>
+/// 负责 Agent 宿主相关的服务注册。
+/// </summary>
 public static class ServiceCollectionExtensions
 {
     private const string AgentHttpClientName = "Wesley";
-
-    public static string DecodeOutput(this MemoryStream stream)
-    {
-        var bytes = stream.ToArray();
-
-        if (bytes.Length == 0)
-            return string.Empty;
-
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-
-        var result = CharsetDetector.DetectFromBytes(bytes);
-
-        var encoding = result.Detected?.Encoding ?? Encoding.UTF8;
-
-        return encoding.GetString(bytes).TrimEnd();
-    }
-
-    public static string ComputeMd5(this string target) => Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(target))).ToLowerInvariant();
-
-    public static ChatMessage WithMessageId(this ChatMessage message, string messageId)
-    {
-        if (message.MessageId != null && message.MessageId == messageId)
-        {
-            return message;
-        }
-
-        message = message.Clone();
-        message.MessageId = messageId;
-        return message;
-    }
-
-    public static void CommonWriteMessage(this IOutputCapture capture, string? author, AIContent content)
-    {
-        if (content is ErrorContent errorContent)
-        {
-            capture.WriteSystemMessage(errorContent.Message);
-        }
-        else if (content is FunctionCallContent callContent)
-        {
-            capture.WriteToolCall(callContent.CallId, author, callContent.Name, callContent.Arguments);
-        }
-        else if (content is FunctionResultContent resultContent)
-        {
-            var result = resultContent.Exception?.Message ?? resultContent.Result;
-            capture.WriteToolResult(resultContent.CallId, author, result);
-        }
-    }
-
-    public static AIAgentBuilder UseAgentOutput(this AIAgentBuilder builder, IOutputCapture capture) =>
-        builder.Use(innerAgent => new OutputAgent(innerAgent, capture));
-
-    public static AIAgentBuilder UseAgentLoop(this AIAgentBuilder builder) =>
-        builder.Use(innerAgent => new LoopAgent(
-            innerAgent,
-            new NonEmptyLoopEvaluator(),
-            new LoopAgentOptions { OnBehalfOfAuthorName = "loop", ExcludeOnBehalfOfMessages = true }
-        ));
 
     public static IHttpClientBuilder ConfigureHttpClientAgents(this IServiceCollection services, Action<HttpClient> configureClient) =>
         services.AddHttpClient(AgentHttpClientName).ConfigureHttpClient(configureClient);

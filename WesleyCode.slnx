@@ -1,4 +1,4 @@
-<Solution>
+﻿<Solution>
     <Folder Name="/Solution Items/">
         <File Path=".editorconfig" />
         <File Path=".gitattributes" />
@@ -9,4 +9,5 @@
     <Project Path="WesleyCode.Agent\WesleyCode.Agent.csproj" />
     <Project Path="WesleyCode.Console\WesleyCode.Console.csproj" />
     <Project Path="WesleyCode.Web/WesleyCode.Web.csproj" />
+    <Project Path="WesleyCode.Tests\WesleyCode.Tests.csproj" />
 </Solution>
