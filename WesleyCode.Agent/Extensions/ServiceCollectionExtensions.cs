@@ -41,10 +41,16 @@ public static class ServiceCollectionExtensions
             .Configure<IConfiguration>(
                 (options, configuration) =>
                 {
-                    options.Provider = configuration.GetValue<string>("WESLEY_PROVIDER");
-                    options.ModelId = configuration.GetValue<string>("WESLEY_MODELID");
-                    options.BaseUrl = configuration.GetValue<string>("WESLEY_BASEURL");
-                    options.ApiKey = configuration.GetValue<string>("WESLEY_APIKEY");
+                    options.Provider = configuration.GetValue<string?>("WESLEY_PROVIDER");
+                    options.ModelId = configuration.GetValue<string?>("WESLEY_MODELID");
+                    options.BaseUrl = configuration.GetValue<string?>("WESLEY_BASEURL");
+                    options.ApiKey = configuration.GetValue<string?>("WESLEY_APIKEY");
+                    options.AllowBackgroundResponses = configuration.GetValue<bool?>("AllowBackgroundResponses");
+                    options.AllowMultipleToolCalls = configuration.GetValue<bool?>("AllowMultipleToolCalls");
+                    options.Effort = configuration.GetValue<ReasoningEffort?>("Effort");
+                    options.Output = configuration.GetValue<ReasoningOutput?>("Output");
+                    options.MaxOutputTokens = configuration.GetValue<int?>("MaxOutputTokens");
+                    options.StopMark = configuration.GetValue<string>("StopMark") ?? "[EOF]";
                 }
             );
         services

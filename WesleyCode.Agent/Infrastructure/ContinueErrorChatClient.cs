@@ -46,7 +46,7 @@ public class ContinueErrorChatClient : DelegatingChatClient
             }
             catch (Exception ex)
             {
-                contents = [new ErrorContent($"发生一个错误: {ex.Message}")];
+                contents = [new ErrorContent($"发生一个错误: {ex.GetBaseException().Message}")];
             }
 
             yield return new ChatResponseUpdate(ChatRole.Assistant, contents);

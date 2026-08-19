@@ -5,7 +5,12 @@ namespace WesleyCode.Agent.Infrastructure;
 
 public sealed class NonEmptyLoopEvaluator : LoopEvaluator
 {
-    public const string CompletionMarker = "[处理完成]";
+    private readonly string _completionMarker;
+
+    public NonEmptyLoopEvaluator(string completionMarker)
+    {
+        this._completionMarker = completionMarker;
+    }
 
     private static ValueTask<LoopEvaluation> Continue(Type type, string feedback) =>
         ValueTask.FromResult(
@@ -43,9 +48,9 @@ public sealed class NonEmptyLoopEvaluator : LoopEvaluator
             return Continue(this.GetType(), "继续处理请求，回复必须包含非空文本内容。");
         }
 
-        if (!textContent.Text.Contains(CompletionMarker, StringComparison.Ordinal))
+        if (!textContent.Text.Contains(_completionMarker, StringComparison.Ordinal))
         {
-            return Continue(this.GetType(), $"完成任务后必须在最终回复中包含 `{CompletionMarker}`。如果尚未完成，请继续完成剩余工作。");
+            return Continue(this.GetType(), $"最终回复中必须包含`{_completionMarker}`。");
         }
 
         return new ValueTask<LoopEvaluation>(LoopEvaluation.Stop());

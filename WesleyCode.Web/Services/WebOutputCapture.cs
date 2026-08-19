@@ -1,7 +1,9 @@
 ﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
 using WesleyCode.Agent.Interfaces;
+using WesleyCode.Agent.Options;
 using WesleyCode.Web.Interfaces;
 
 namespace WesleyCode.Web.Services;
@@ -15,17 +17,20 @@ public sealed class WebOutputCapture : IOutputCapture
     };
 
     private readonly IWebOutputCaptureState _state;
+    private readonly IOptions<ChatClientOptions> _options;
 
-    public WebOutputCapture(IWebOutputCaptureState state)
+    public WebOutputCapture(IWebOutputCaptureState state, IOptions<ChatClientOptions> options)
     {
         _state = state;
+        this._options = options;
     }
 
     public void WriteUserTitle() { }
 
     public void WriteUserMessage(string message) => _state.AddCurrentMessage(ChatRole.User, ChatAuthorNames.User, message);
 
-    public void WriteAgentMessage(string message) => _state.AddCurrentMessage(ChatRole.Assistant, ChatAuthorNames.Assistant, message);
+    public void WriteAgentMessage(string message) =>
+        _state.AddCurrentMessage(ChatRole.Assistant, ChatAuthorNames.Assistant, message.Replace(_options.Value.StopMark, string.Empty));
 
     public void WriteSystemMessage(string message) => _state.AddCurrentMessage(ChatRole.System, ChatAuthorNames.System, message);
 

@@ -1,7 +1,9 @@
 ﻿using System.Text.Encodings.Web;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using Spectre.Console;
 using WesleyCode.Agent.Interfaces;
+using WesleyCode.Agent.Options;
 
 namespace WesleyCode.Console.Hosting;
 
@@ -10,11 +12,18 @@ internal class ConsoleOutputCapture : IOutputCapture
     private const int MaxLogLength = 512;
     private const string TruncatedSuffix = "[输出被截断，内容过长]";
 
-    private static readonly JsonSerializerOptions _options = new JsonSerializerOptions
+    private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
     {
         WriteIndented = false,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
+
+    private readonly IOptions<ChatClientOptions> _options;
+
+    public ConsoleOutputCapture(IOptions<ChatClientOptions> options)
+    {
+        this._options = options;
+    }
 
     public void WriteUserTitle()
     {
@@ -25,7 +34,8 @@ internal class ConsoleOutputCapture : IOutputCapture
 
     public void WriteUserMessage(string message) => WriteBlock("User", message, Color.Aqua, Color.Silver);
 
-    public void WriteAgentMessage(string message) => WriteBlock("Agent", message, Color.Lime, Color.Silver);
+    public void WriteAgentMessage(string message) =>
+        WriteBlock("Agent", message.Replace(_options.Value.StopMark, string.Empty), Color.Lime, Color.Silver);
 
     public void WriteSystemMessage(string message) => WriteBlock("System", message, Color.Fuchsia, Color.Silver);
 
@@ -67,7 +77,7 @@ internal class ConsoleOutputCapture : IOutputCapture
         if (result == null)
             return "null";
 
-        var message = JsonSerializer.Serialize(result, _options).Replace("\\r\\n", "").Replace("\\n", "").Replace("  ", "");
+        var message = JsonSerializer.Serialize(result, JsonOptions).Replace("\\r\\n", "").Replace("\\n", "").Replace("  ", "");
         if (message.Length > MaxLogLength)
         {
             var contentLength = Math.Max(0, MaxLogLength - TruncatedSuffix.Length);

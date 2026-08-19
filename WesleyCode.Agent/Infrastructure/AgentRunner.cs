@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Interfaces;
+using WesleyCode.Agent.Options;
 
 namespace WesleyCode.Agent.Infrastructure;
 
@@ -12,14 +13,14 @@ internal class AgentRunner : IAgentRunner
     private readonly AIAgent _agent;
     private readonly IOutputCapture _capture;
 
-    public AgentRunner(IChatClient client, IOutputCapture capture, IOptions<ChatOptions> options, IEnumerable<AIContextProvider> providers)
+    public AgentRunner(IChatClient client, IOutputCapture capture, IOptions<ChatClientOptions> options, IEnumerable<AIContextProvider> providers)
     {
         this._agent = client
-            .AsAIAgent(BuildChatClientAgentOptions(options, providers))
+            .AsAIAgent(BuildChatClientAgentOptions(options.Value, providers))
             .AsBuilder()
-            .UseAgentLoop()
-            .UseAgentOutput(capture)
             .UseToolApproval(BuildToolApprovalAgentOptions())
+            .UseAgentLoop(options.Value.StopMark)
+            .UseAgentOutput(capture)
             .Build();
         this._capture = capture;
     }
@@ -72,11 +73,19 @@ internal class AgentRunner : IAgentRunner
         return Task.CompletedTask;
     }
 
-    private static ChatClientAgentOptions BuildChatClientAgentOptions(IOptions<ChatOptions> options, IEnumerable<AIContextProvider> providers) =>
+    private static ChatClientAgentOptions BuildChatClientAgentOptions(ChatClientOptions options, IEnumerable<AIContextProvider> providers) =>
         new ChatClientAgentOptions
         {
             Name = "main",
-            ChatOptions = options.Value,
+            ChatOptions = new ChatOptions
+            {
+                Instructions = $"最终回复中必须包含`{options.StopMark}`。",
+                AllowMultipleToolCalls = options.AllowMultipleToolCalls,
+                AllowBackgroundResponses = options.AllowBackgroundResponses,
+                Reasoning = new ReasoningOptions { Effort = options.Effort, Output = options.Output },
+                MaxOutputTokens = options.MaxOutputTokens,
+                StopSequences = [options.StopMark],
+            },
             AIContextProviders = providers,
             ChatHistoryProvider = new InMemoryChatHistoryProvider(
                 new InMemoryChatHistoryProviderOptions

@@ -35,7 +35,11 @@ internal static class ChatClientFactory
         if (string.IsNullOrWhiteSpace(options.ApiKey))
             throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
 
-        var clientOptions = new OpenAIClientOptions { Transport = new HttpClientPipelineTransport(httpClient) };
+        var clientOptions = new OpenAIClientOptions
+        {
+            Transport = new HttpClientPipelineTransport(httpClient),
+            MessageLoggingPolicy = new LoggingAuthPolicy(),
+        };
 
         if (GetEndpoint(options.BaseUrl) is Uri endpoint)
             clientOptions.Endpoint = endpoint;
@@ -95,7 +99,11 @@ internal static class ChatClientFactory
         if (string.IsNullOrWhiteSpace(options.ApiKey))
             throw new InvalidOperationException("未配置 API Key，请设置 WESLEY_APIKEY。");
 
-        var clientOptions = new OpenAIClientOptions { Transport = new HttpClientPipelineTransport(httpClient) };
+        var clientOptions = new OpenAIClientOptions
+        {
+            Transport = new HttpClientPipelineTransport(httpClient),
+            MessageLoggingPolicy = new LoggingAuthPolicy(),
+        };
 
         if (GetEndpoint(options.BaseUrl) is Uri endpoint)
             clientOptions.Endpoint = endpoint;

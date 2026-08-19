@@ -18,10 +18,10 @@ public static class AIAgentBuilderExtensions
     /// <summary>
     /// 为 Agent 注册循环执行器，直到满足 <see cref="NonEmptyLoopEvaluator"/> 的完成条件。
     /// </summary>
-    public static AIAgentBuilder UseAgentLoop(this AIAgentBuilder builder) =>
+    public static AIAgentBuilder UseAgentLoop(this AIAgentBuilder builder, string completionMarker) =>
         builder.Use(innerAgent => new LoopAgent(
             innerAgent,
-            new NonEmptyLoopEvaluator(),
+            new NonEmptyLoopEvaluator(completionMarker),
             new LoopAgentOptions { OnBehalfOfAuthorName = "loop", ExcludeOnBehalfOfMessages = true }
         ));
 }
