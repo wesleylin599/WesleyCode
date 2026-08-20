@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
 using WesleyCode.Web.Interfaces;
@@ -30,7 +31,7 @@ public sealed class WebOutputCapture : IOutputCapture
     public void WriteUserMessage(string message) => _state.AddCurrentMessage(ChatRole.User, ChatAuthorNames.User, message);
 
     public void WriteAgentMessage(string message) =>
-        _state.AddCurrentMessage(ChatRole.Assistant, ChatAuthorNames.Assistant, message.Replace(_options.Value.StopMark, string.Empty));
+        _state.AddCurrentMessage(ChatRole.Assistant, ChatAuthorNames.Assistant, message.TrimMarker(_options.Value.StopMark));
 
     public void WriteSystemMessage(string message) => _state.AddCurrentMessage(ChatRole.System, ChatAuthorNames.System, message);
 

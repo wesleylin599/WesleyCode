@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Spectre.Console;
+using WesleyCode.Agent.Extensions;
 using WesleyCode.Agent.Interfaces;
 using WesleyCode.Agent.Options;
 
@@ -34,8 +35,7 @@ internal class ConsoleOutputCapture : IOutputCapture
 
     public void WriteUserMessage(string message) => WriteBlock("User", message, Color.Aqua, Color.Silver);
 
-    public void WriteAgentMessage(string message) =>
-        WriteBlock("Agent", message.Replace(_options.Value.StopMark, string.Empty), Color.Lime, Color.Silver);
+    public void WriteAgentMessage(string message) => WriteBlock("Agent", message.TrimMarker(_options.Value.StopMark), Color.Lime, Color.Silver);
 
     public void WriteSystemMessage(string message) => WriteBlock("System", message, Color.Fuchsia, Color.Silver);
 
