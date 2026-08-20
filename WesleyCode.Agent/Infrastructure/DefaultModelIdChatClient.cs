@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.AI;
+﻿using System.Runtime.CompilerServices;
+using DeepSeek.Core;
+using Microsoft.Extensions.AI;
 
 namespace WesleyCode.Agent.Infrastructure;
 
@@ -12,17 +14,30 @@ internal sealed class DefaultModelIdChatClient : DelegatingChatClient
         _modelId = modelId;
     }
 
-    public override Task<ChatResponse> GetResponseAsync(
+    public override async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default
-    ) => base.GetResponseAsync(messages, UseDefaultModel(options), cancellationToken);
+    )
+    {
+        var response = await base.GetResponseAsync(messages, UseDefaultModel(options), cancellationToken);
+        Throw();
+        return response;
+    }
 
-    public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+    public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        CancellationToken cancellationToken = default
-    ) => base.GetStreamingResponseAsync(messages, UseDefaultModel(options), cancellationToken);
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        await foreach (var item in base.GetStreamingResponseAsync(messages, UseDefaultModel(options), cancellationToken))
+        {
+            Throw();
+            yield return item;
+        }
+        Throw();
+    }
 
     private ChatOptions UseDefaultModel(ChatOptions? options)
     {
@@ -34,5 +49,13 @@ internal sealed class DefaultModelIdChatClient : DelegatingChatClient
         }
 
         return requestOptions;
+    }
+
+    private void Throw()
+    {
+        if (GetService(typeof(DeepSeekClient)) is DeepSeekClient deepSeek && !string.IsNullOrEmpty(deepSeek.ErrorMsg))
+        {
+            throw new Exception(deepSeek.ErrorMsg);
+        }
     }
 }

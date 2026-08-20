@@ -79,7 +79,18 @@ internal class AgentRunner : IAgentRunner
             Name = "main",
             ChatOptions = new ChatOptions
             {
-                Instructions = $"最终回复中必须包含`{options.StopMark}`。",
+                Instructions = $"""
+                    每次准备结束当前回复时，必须在回复中输出标记 `{options.StopMark}`。
+
+                    以下情况都必须输出该标记：
+                    - 已完成用户请求；
+                    - 需要用户提供额外信息；
+                    - 需要用户确认后才能继续；
+                    - 当前无法继续，需要用户采取行动。
+
+                    只有在仍然可以通过工具或内部推理继续处理任务时，才不要输出该标记。
+
+                    """,
                 AllowMultipleToolCalls = options.AllowMultipleToolCalls,
                 AllowBackgroundResponses = options.AllowBackgroundResponses,
                 Reasoning = new ReasoningOptions { Effort = options.Effort, Output = options.Output },

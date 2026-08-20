@@ -58,10 +58,12 @@ public class NonEmptyLoopEvaluatorTests
 
     private static AgentResponse CreateResponse(params ChatMessage[] messages) => new(messages);
 
+    private const string CompletionMarker = "[EOF]";
+
     [Fact]
     public async Task EvaluateAsync_EmptyMessages_ContinuesWithFeedback()
     {
-        var evaluator = new NonEmptyLoopEvaluator();
+        var evaluator = new NonEmptyLoopEvaluator(CompletionMarker);
         var session = await agent.CreateSessionAsync();
         var context = CreateContext(CreateResponse(), session);
 
@@ -73,7 +75,7 @@ public class NonEmptyLoopEvaluatorTests
     [Fact]
     public async Task EvaluateAsync_NoAssistantMessage_ContinuesWithFeedback()
     {
-        var evaluator = new NonEmptyLoopEvaluator();
+        var evaluator = new NonEmptyLoopEvaluator(CompletionMarker);
         var userMessage = new ChatMessage(ChatRole.User, "hello");
         var session = await agent.CreateSessionAsync();
         var context = CreateContext(CreateResponse(userMessage), session);
@@ -86,7 +88,7 @@ public class NonEmptyLoopEvaluatorTests
     [Fact]
     public async Task EvaluateAsync_ErrorContent_Stops()
     {
-        var evaluator = new NonEmptyLoopEvaluator();
+        var evaluator = new NonEmptyLoopEvaluator(CompletionMarker);
         var assistantMessage = new ChatMessage(ChatRole.Assistant, [new ErrorContent("some error")]);
         var session = await agent.CreateSessionAsync();
         var context = CreateContext(CreateResponse(assistantMessage), session);
@@ -99,7 +101,7 @@ public class NonEmptyLoopEvaluatorTests
     [Fact]
     public async Task EvaluateAsync_EmptyText_ContinuesWithFeedback()
     {
-        var evaluator = new NonEmptyLoopEvaluator();
+        var evaluator = new NonEmptyLoopEvaluator(CompletionMarker);
         var assistantMessage = new ChatMessage(ChatRole.Assistant, "");
         var session = await agent.CreateSessionAsync();
         var context = CreateContext(CreateResponse(assistantMessage), session);
@@ -112,7 +114,7 @@ public class NonEmptyLoopEvaluatorTests
     [Fact]
     public async Task EvaluateAsync_NoCompletionMarker_ContinuesWithFeedback()
     {
-        var evaluator = new NonEmptyLoopEvaluator();
+        var evaluator = new NonEmptyLoopEvaluator(CompletionMarker);
         var assistantMessage = new ChatMessage(ChatRole.Assistant, "这是回复但没完成标记");
         var session = await agent.CreateSessionAsync();
         var context = CreateContext(CreateResponse(assistantMessage), session);
@@ -125,8 +127,8 @@ public class NonEmptyLoopEvaluatorTests
     [Fact]
     public async Task EvaluateAsync_WithCompletionMarker_Stops()
     {
-        var evaluator = new NonEmptyLoopEvaluator();
-        var assistantMessage = new ChatMessage(ChatRole.Assistant, $"任务已完成 {NonEmptyLoopEvaluator.CompletionMarker}");
+        var evaluator = new NonEmptyLoopEvaluator(CompletionMarker);
+        var assistantMessage = new ChatMessage(ChatRole.Assistant, $"任务已完成 {CompletionMarker}");
         var session = await agent.CreateSessionAsync();
         var context = CreateContext(CreateResponse(assistantMessage), session);
 
