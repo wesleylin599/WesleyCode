@@ -43,6 +43,10 @@ internal sealed class CommandProvider : AIContextProvider
     )
     {
         CommandRunResult output = new CommandRunResult();
+        using var standardOutput = new MemoryStream();
+        using var standardError = new MemoryStream();
+        var timeoutSeconds = timeout <= 0 ? DefaultTimeoutSeconds : Math.Min(timeout, MaxTimeoutSeconds);
+
         try
         {
             if (string.IsNullOrEmpty(command))
@@ -55,12 +59,8 @@ internal sealed class CommandProvider : AIContextProvider
                 _ => throw new InvalidOperationException($"Unsupported shell: {family}"),
             };
 
-            var timeoutSeconds = timeout <= 0 ? DefaultTimeoutSeconds : Math.Min(timeout, MaxTimeoutSeconds);
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-
-            using var standardOutput = new MemoryStream();
-            using var standardError = new MemoryStream();
 
             var cli = Cli.Wrap(family.ToString())
                 .WithArguments(arguments)
@@ -74,9 +74,16 @@ internal sealed class CommandProvider : AIContextProvider
             output.Output = standardOutput.DecodeOutput();
             output.Error = standardError.DecodeOutput();
         }
+        catch (OperationCanceledException)
+        {
+            output.ExitCode = 124;
+            output.Output = standardOutput.DecodeOutput();
+            output.Error = $"命令执行超时（>{timeoutSeconds} 秒），已返回部分或没有输出。";
+        }
         catch (Exception ex)
         {
             output.ExitCode = -1;
+            output.Output = standardOutput.DecodeOutput();
             output.Error = $"调用失败 {ex.Message} 修复后重试";
         }
 

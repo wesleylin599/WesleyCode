@@ -16,11 +16,10 @@ internal static class CliWrapRunner
     )
     {
         var (commandPath, commandArguments) = BuildCommand(script.FullPath, ParseArguments(arguments));
-
+        using var standardOutput = new MemoryStream();
+        using var standardError = new MemoryStream();
         try
         {
-            using var standardOutput = new MemoryStream();
-            using var standardError = new MemoryStream();
             var command = Cli.Wrap(commandPath)
                 .WithArguments(commandArguments)
                 .WithWorkingDirectory(skill.Path)
@@ -36,9 +35,23 @@ internal static class CliWrapRunner
                 error = standardError.DecodeOutput(),
             };
         }
+        catch (OperationCanceledException)
+        {
+            return new
+            {
+                code = 124,
+                output = standardOutput.DecodeOutput(),
+                error = "脚本执行被取消。",
+            };
+        }
         catch (Exception ex)
         {
-            return new { code = -1, error = $"脚本执行失败：{ex.Message}" };
+            return new
+            {
+                code = -1,
+                output = standardOutput.DecodeOutput(),
+                error = $"脚本执行失败：{ex.Message}",
+            };
         }
     }
 

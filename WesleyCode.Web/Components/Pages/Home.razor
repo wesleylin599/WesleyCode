@@ -347,36 +347,4 @@
         ChatMessage? FinalAssistantMessage,
         IReadOnlyList<ChatMessage> ThoughtMessages,
         IReadOnlyList<ChatMessage> SystemMessages);
-
-    private static string GetAvatarClass(ChatRole role) => role switch
-    {
-        var current when current == ChatRole.User => "avatar-user",
-        var current when current == ChatRole.Assistant => "avatar-assistant",
-        var current when current == ChatRole.System => "avatar-system",
-        _ => string.Empty,
-    };
-
-    private static string GetAvatarText(ChatRole role) => role switch
-    {
-        var current when current == ChatRole.User => "你",
-        var current when current == ChatRole.Assistant => "W",
-        var current when current == ChatRole.System => "S",
-        _ => "?",
-    };
-
-    private static string GetMessageCardClass(ChatRole role) => role switch
-    {
-        var current when current == ChatRole.User => "message-user",
-        var current when current == ChatRole.Assistant => "message-assistant",
-        var current when current == ChatRole.System => "message-system",
-        _ => string.Empty,
-    };
-
-    private static string GetMessageRowClass(ChatRole role) => role switch
-    {
-        var current when current == ChatRole.User => "user",
-        var current when current == ChatRole.Assistant => "assistant",
-        var current when current == ChatRole.System => "system",
-        _ => string.Empty,
-    };
 }
